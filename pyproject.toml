@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "youtube-influencer-mcp"
+version = "0.1.0"
+description = "Local MCP tools for researching, producing, and packaging YouTube Shorts."
+requires-python = ">=3.11"
+dependencies = [
+  "mcp>=1.9,<2",
+  "mediapipe>=0.10.21,<0.11",
+  "Pillow>=10,<13",
+  "google-api-python-client>=2.100,<3",
+  "google-auth-oauthlib>=1.2,<2",
+  "psutil>=5.9",
+]
+
+[project.optional-dependencies]
+# Testes: quickjs confere a sintaxe do JavaScript do painel (um erro deixava a página vazia).
+dev = ["pytest", "quickjs"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["influencer_mcp*"]

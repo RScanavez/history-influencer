@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel Historiador</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --card: #ffffff; --ink: #1f2328; --muted: #6a6f76; --line: #e3e1dc;
+    --accent: #1f5fbf; --accent-ink: #ffffff; --ok: #1a7f4b; --warn: #a35d00; --bad: #b42318; --chip: #eef1f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15171a; --card: #1e2125; --ink: #e8e8e6; --muted: #9aa0a6; --line: #30343a;
+      --accent: #6ea8ff; --accent-ink: #0d1117; --ok: #4cc38a; --warn: #f0a94a; --bad: #ff7b72; --chip: #2a2f36;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 20px 24px 8px; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: baseline; }
+  h1 { font-size: 20px; margin: 0; }
+  h2 { font-size: 13px; margin: 0 0 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  h3 { font-size: 17px; margin: 0; }
+  main { padding: 8px 24px 40px; display: grid; gap: 20px; max-width: 1240px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; min-width: 0; }
+  .status { display: flex; flex-wrap: wrap; gap: 8px 18px; color: var(--muted); font-size: 14px; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 10px; border-top: 1px solid var(--line); vertical-align: top; }
+  th { border-top: 0; color: var(--muted); font-weight: 600; font-size: 13px; }
+  td.num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .chip { display: inline-block; padding: 2px 9px; border-radius: 999px; background: var(--chip); font-size: 13px; white-space: nowrap; }
+  .chip.run { color: var(--accent); } .chip.ok { color: var(--ok); } .chip.warn { color: var(--warn); } .chip.bad { color: var(--bad); }
+  .small { color: var(--muted); font-size: 13px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+  .video { border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: grid; gap: 8px; cursor: pointer; background: none; color: inherit; font: inherit; text-align: left; }
+  .video:hover, .video:focus-visible { border-color: var(--accent); outline: none; }
+  .video img { width: 100%; height: 120px; object-fit: cover; object-position: top; border-radius: 6px; border: 1px solid var(--line); }
+  .video .title { font-weight: 600; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  a { color: var(--accent); }
+  .empty { color: var(--muted); }
+  button.btn, .filters button { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 7px; padding: 6px 12px; cursor: pointer; font: inherit; font-size: 14px; }
+  button.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button.btn.danger { color: var(--bad); }
+  button.btn:disabled { opacity: .45; cursor: not-allowed; }
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .filters button { border-radius: 999px; padding: 3px 11px; font-size: 13px; }
+  .filters button[aria-pressed="true"] { background: var(--ink); color: var(--card); }
+  input, textarea, select { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 6px 9px; width: 100%; }
+  textarea { min-height: 70px; resize: vertical; }
+  label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+  form.lote { display: grid; grid-template-columns: 170px 90px 1fr auto; gap: 10px; align-items: end; }
+  pre.log { background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 10px; max-height: 220px; overflow: auto; white-space: pre-wrap; font-size: 12px; margin: 8px 0 0; }
+  /* Revisão de um vídeo */
+  #detail { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 24px 12px; z-index: 10; }
+  #detail.open { display: flex; }
+  .sheet { background: var(--card); border-radius: 12px; width: min(1180px, 100%); padding: 18px 20px 24px; display: grid; gap: 18px; }
+  .sheet-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+  .players { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .players video { width: 100%; max-height: 460px; background: #000; border-radius: 8px; }
+  .scenes { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .scene { border: 1px solid var(--line); border-radius: 8px; padding: 8px; display: grid; gap: 6px; align-content: start; }
+  .scene img { width: 100%; aspect-ratio: 9/16; object-fit: cover; border-radius: 6px; background: var(--chip); }
+  .scene.wide img { aspect-ratio: 16/9; }
+  .scene.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+  .scene p { margin: 0; font-size: 13px; }
+  details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+  .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .meta .full { grid-column: 1 / -1; }
+  /* Medidores de uso do computador */
+  .gauges { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+  .gauge { text-align: center; }
+  .gauge svg { width: 100%; max-width: 260px; display: block; margin: 0 auto; }
+  .gauge .track { stroke: var(--chip); }
+  .gauge .bar { stroke: var(--accent); transition: stroke-dasharray .6s ease, stroke .3s; }
+  .gauge.hot .bar { stroke: var(--bad); }
+  .gauge .value { font-size: 34px; font-weight: 700; fill: var(--ink); font-variant-numeric: tabular-nums; }
+  .gauge.hot .value { fill: var(--bad); }
+  .gauge .limit { stroke: var(--bad); stroke-width: 3; }
+  .gauge .label { font-weight: 600; font-size: 16px; margin-top: -4px; }
+  #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--card); padding: 10px 16px; border-radius: 8px; display: none; z-index: 20; max-width: 90vw; }
+  @media (max-width: 640px) {
+    header, main { padding-left: 16px; padding-right: 16px; }
+    th:nth-child(4), td:nth-child(4) { display: none; }
+    form.lote, .meta { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Painel de produção — Historiador</h1>
+  <div class="status" id="status">carregando…</div>
+</header>
+<main>
+  <section>
+    <h2>Uso do computador</h2>
+    <div class="gauges" id="gauges"><p class="empty">carregando…</p></div>
+  </section>
+  <section>
+    <div id="envCheck"></div>
+    <h2>Novo lote</h2>
+    <form class="lote" id="loteForm">
+      <label>Identidade visual<select name="identity" id="identitySelect"></select></label>
+      <label>Personagem<select name="profile" id="profileSelect"></select></label>
+      <label>GPU<select name="gpu" id="gpuSelect"><option value="local">Local (este PC)</option><option value="remota">Remota (RunPod)</option></select></label>
+      <label>Formato<select name="format"><option value="short">Short (vertical)</option><option value="video">Vídeo (horizontal)</option></select></label>
+      <label>Vídeos<select name="quantity"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label>
+      <label>Tema (opcional)<input name="theme" maxlength="200" placeholder="ex.: equilíbrio, exercícios com cadeira"></label>
+      <button class="btn primary" type="submit">Iniciar lote</button>
+    </form>
+    <p class="small">Roda o /gerar-lote no Claude Code em segundo plano (pesquisa, roteiro, imagens-chave e SEO). Cada vídeo para em "Revisão das imagens-chave" até você aprovar aqui. Pode iniciar outro lote enquanto um está em andamento: as imagens-chave entram na fila da GPU por ordem de chegada.</p>
+    <div id="lotes"></div>
+  </section>
+  <section>
+    <h2>Fila da GPU</h2>
+    <div id="remoteGpu"></div>
+    <div id="queue"></div>
+  </section>
+  <section>
+    <div class="row" style="justify-content:space-between">
+      <h2>Vídeos</h2>
+      <button class="btn" id="langCleanBtn" title="Apaga traduções e vídeos de idiomas desativados nas pastas de trabalho (output/ não é tocado)">Limpar idiomas desligados</button>
+      <button class="btn" id="archiveBtn" title="Move para output/archive tudo que tem &quot;OK - &quot; em output/shorts e output/videos">Arquivar publicados (OK)</button>
+    </div>
+    <div class="filters" id="filters"></div>
+    <div class="grid" id="videos"></div>
+  </section>
+  <section>
+    <h2>Grade de publicação</h2>
+    <div id="publishing"></div>
+  </section>
+  <section id="failuresBox" hidden>
+    <h2>Falhas recentes</h2>
+    <div id="failures"></div>
+  </section>
+</main>
+
+<footer class="small" style="padding: 0 24px 28px; max-width: 1240px;">
+  Publicação pela YouTube Data API. Ao conectar o canal, você concorda com os
+  <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener">Termos de Serviço do YouTube</a>;
+  dados tratados conforme a <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Política de Privacidade do Google</a>.
+  Para revogar o acesso deste painel ao canal: <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">permissões da conta Google</a>.
+</footer>
+
+<div id="detail" role="dialog" aria-modal="true" aria-labelledby="detailTitle"><div class="sheet" id="sheet"></div></div>
+<div id="toast" role="status"></div>
+
+<script>
+const fmtTime = iso => iso ? new Date(iso).toLocaleString('pt-BR', { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+const fmtDur = s => { if (s == null) return '—'; const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60); return h ? `${h} h ${m} min` : `${m} min`; };
+const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const stageClass = s => /Aprovado|Agendado|Publicado/.test(s) ? 'ok' : /Revisão|Ajustes|Cancelado/.test(s) ? 'warn' : /Falhou|Rejeitado|Erro/.test(s) ? 'bad' : 'run';
+const kindLabel = k => k === 'animation' ? 'Animação' : 'Imagens-chave';
+const LANG = { pt: 'Português', fr: 'Français', en: 'English' };
+let filter = 'Todos', last = null, current = null, selected = new Set(), lastCharacters = [];
+
+function toast(msg, ms = 4500) {
+  const t = document.getElementById('toast'); t.textContent = msg; t.style.display = 'block';
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.style.display = 'none', ms);
+}
+async function post(url, body) {
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || `Erro ${r.status}`);
+  return data;
+}
+function seoChip(s) {
+  if (!s || s.state === 'ok') return '';
+  const what = (s.missing || []).map(l => l === 'pt' ? 'PT' : l.toUpperCase()).join(', ');
+  if (s.state === 'gerando') return `<span class="chip run" title="O app está escrevendo título, descrição e traduções (${what}).">SEO: gerando</span>`;
+  if (s.state === 'erro') return `<span class="chip bad" title="O SEO automático falhou ${s.attempts} vezes (${what}). Peça o SEO no chat.">SEO: erro</span>`;
+  return `<span class="chip warn" title="Falta ${what}. O app gera sozinho em instantes (depois que o lote termina).">SEO: na fila</span>`;
+}
+
+async function act(action, extra = {}, confirmText) {
+  if (confirmText && !confirm(confirmText)) return;
+  try {
+    const res = await post('/api/acao', { action, batch: current.batch, slug: current.slug, ...extra });
+    toast(res.message || 'Feito.'); selected.clear(); await openVideo(current.batch, current.slug); refresh();
+  } catch (e) { toast('Não foi possível: ' + e.message, 7000); }
+}
+
+function render(data) {
+  last = data;
+  document.getElementById('status').innerHTML = [
+    `<span><span class="dot" style="background:${data.comfyui ? 'var(--ok)' : 'var(--bad)'}"></span>ComfyUI ${data.comfyui ? 'no ar' : 'fora do ar (os jobs o iniciam sozinhos)'}${data.comfyui ? ' <button class="btn danger" id="stopComfy" style="padding:2px 8px;font-size:12px;margin-left:6px">Desligar</button>' : ''}</span>`,
+    `<span title="Linha idiomas de fluxo_aprovacao.md">Idiomas: <b>${(data.activeLanguages || ['pt']).map(l => l.toUpperCase()).join(' + ')}</b></span>`,
+    `<span>Fila termina: <b>${data.queueFinish ? fmtTime(data.queueFinish) : 'fila vazia'}</b></span>`,
+    `<span>Clipe médio: ${fmtDur(data.clipSeconds)}</span>`,
+    `<span>Atualizado ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>`,
+  ].join('');
+
+  document.getElementById('lotes').innerHTML = data.lotes.length ? data.lotes.slice(0, 4).map(l => `
+    <details ${l.running || (!l.hasVideo && !l.limitHit) ? 'open' : ''}><summary><span class="chip ${l.running ? 'run' : l.hasVideo && !l.limitHit ? 'ok' : 'bad'}">${l.running ? 'preparando' : l.limitHit ? 'interrompido (limite de uso)' : !l.hasVideo ? 'terminou sem vídeo' : 'terminou'}</span>
+      ${esc(l.prompt)} · <span class="small">${l.character ? esc(l.character) + ' · ' : ''}${fmtTime(l.startedAt)}</span></summary>
+      <pre class="log">${esc(l.logTail || (l.running ? 'O resumo aparece aqui quando o lote terminar (o Claude escreve no fim).' : '(sem saída)'))}</pre></details>`).join('') : '';
+
+  // Identidades visuais de identidade_visual.md (a primeira é a atual) e personagens de personagens.md
+  // ("selecionavel: sim"); o seletor de personagem mostra só os da identidade escolhida.
+  lastCharacters = data.characters || [];
+  const idSel = document.getElementById('identitySelect');
+  const identityIds = (data.identities || []).map(c => c.id).join('|');
+  if (idSel && idSel.dataset.ids !== identityIds) {
+    const keep = idSel.value;
+    idSel.innerHTML = (data.identities || []).map((c, i) => `<option value="${esc(c.id)}">${esc(c.label)}${i === 0 ? ' (atual)' : ''}</option>`).join('');
+    if (keep && identityIds.split('|').includes(keep)) idSel.value = keep;
+    idSel.dataset.ids = identityIds;
+  }
+  fillProfiles();
+  // Verificação do ambiente (feita na abertura do painel): sem GPU local, a fila local fica indisponível;
+  // a remota fica disponível, com a lista do que falta e de como resolver.
+  const env = data.environment || {};
+  const localGpu = env.local || { available: true, gpus: [], problems: [] };
+  const remoteEnv = env.remote || { ready: !!(data.remoteGpu && data.remoteGpu.configured), items: [] };
+  const localOption = document.querySelector('#gpuSelect option[value="local"]');
+  const remoteOption = document.querySelector('#gpuSelect option[value="remota"]');
+  if (localOption) {
+    localOption.disabled = !localGpu.available;
+    localOption.textContent = localGpu.available ? 'Local (este PC)' : 'Local — sem GPU neste computador';
+  }
+  // A remota fica sempre selecionável (decisão do usuário, 2026-10-04); se faltar algo, o lote é recusado
+  // com a explicação e a caixa "Verificação do ambiente" mostra o que fazer.
+  if (remoteOption) {
+    remoteOption.disabled = false;
+    remoteOption.textContent = remoteEnv.ready ? 'Remota (RunPod)' : 'Remota (RunPod) — falta configurar';
+  }
+  const gpuSelect = document.getElementById('gpuSelect');
+  if (gpuSelect && !localGpu.available && gpuSelect.value === 'local') gpuSelect.value = 'remota';
+  const pending = (remoteEnv.items || []).filter(i => !i.ok);
+  document.getElementById('envCheck').innerHTML = localGpu.available ? `<p class="small" style="opacity:.6;margin:0 0 12px">GPU remota (pay as you go) desabilitada por código.</p>` : `
+    <div class="card" style="margin-bottom:12px">
+      <h3>Verificação do ambiente</h3>
+      <p><span class="chip ${localGpu.available ? 'ok' : 'warn'}">GPU local: ${localGpu.available ? esc(localGpu.gpus.join(', ')) : 'indisponível'}</span>
+        ${localGpu.available ? '' : `<span class="small">${esc(localGpu.problems.join(' '))} A fila local fica desativada; use a GPU remota.</span>`}</p>
+      <p class="small" style="opacity:.6">GPU remota (pay as you go) desabilitada por código.</p>
+      <button class="btn" id="recheckEnv">Verificar de novo</button>
+    </div>`;
+  const rg = data.remoteGpu || {};
+  document.getElementById('remoteGpu').innerHTML = !rg.configured ? '' : rg.error
+    ? `<p><span class="chip bad">GPU remota</span> <span class="small">${esc(rg.error)}</span></p>`
+    : `<p class="row"><span class="chip ${rg.running ? (rg.idleMinutes >= 10 ? 'warn' : 'run') : ''}">GPU remota (H100): ${rg.running ? 'ligada' : 'desligada'}</span>
+        ${rg.running ? `<span class="small">US$ ${esc(rg.costPerHr)}/h${rg.idleMinutes != null ? ` · sem uso há ${rg.idleMinutes} min` : ''}${rg.idleMinutes >= 10 ? ' — está cobrando sem trabalho' : ''}</span>
+        <button class="btn danger" id="stopRemote">Desligar GPU remota</button>` : '<span class="small">liga sozinha quando entrar um vídeo remoto</span>'}</p>`;
+  const q = data.queue;
+  // Uma tabela por GPU: cada uma tem fila própria e as duas rodam ao mesmo tempo.
+  const waitingGpu = j => /aguardando H100/.test(j.lastProgress || '');
+  const stateChip = j => j.paused ? ['warn', 'pausado'] : waitingGpu(j) ? ['warn', 'aguardando H100 livre']
+    : j.state === 'running' ? ['run', 'rodando'] : ['', 'na fila'];
+  const table = rows => `<table>
+    <tr><th>#</th><th>Vídeo</th><th>Etapa</th><th>Último progresso</th><th>Término previsto</th><th>Falta</th><th></th></tr>
+    ${rows.map((j, i) => { const [cls, label] = stateChip(j); return `<tr>
+      <td class="num">${i + 1}</td>
+      <td><b>${esc(j.slug)}</b><div class="small">${esc(j.batch)} · job ${esc(j.id)}</div></td>
+      <td><span class="chip ${cls}">${kindLabel(j.kind)} · ${label}</span>
+          ${j.state === 'queued' ? `<div class="small">início ≈ ${fmtTime(j.expectedStart)}</div>` : ''}</td>
+      <td class="small">${esc((j.lastProgress || '').replace(/^\S+\s/, '')) || '—'}</td>
+      <td class="num">${waitingGpu(j) ? '—' : fmtTime(j.expectedFinish)}</td>
+      <td class="num">${waitingGpu(j) ? '—' : fmtDur(j.remainingSeconds)}</td>
+      <td><div class="row" style="flex-wrap:nowrap">
+        <button class="btn" data-job="${esc(j.id)}" data-jobact="${j.paused ? 'retomar_job' : 'pausar_job'}">${j.paused ? 'Retomar' : 'Pausar'}</button>
+        <button class="btn danger" data-job="${esc(j.id)}" data-jobact="cancelar_job" data-slug="${esc(j.slug)}">Cancelar</button></div></td>
+    </tr>`; }).join('')}</table>`;
+  const local = q.filter(j => j.gpu !== 'remota'), remote = q.filter(j => j.gpu === 'remota');
+  document.getElementById('queue').innerHTML = !q.length ? '<p class="empty">Nenhum job rodando ou na fila.</p>'
+    : `<h3>GPU local (este PC)</h3>${local.length ? table(local) : '<p class="empty">Nada na fila local.</p>'}`
+      + (remote.length || (data.remoteGpu && data.remoteGpu.configured)
+        ? `<h3>GPU remota (H100, RunPod)</h3>${remote.length ? table(remote) : '<p class="empty">Nada na fila remota.</p>'}` : '');
+
+  const stages = ['Todos', ...new Set(data.videos.map(v => v.stage))];
+  document.getElementById('filters').innerHTML = stages.map(s =>
+    `<button aria-pressed="${s === filter}" data-s="${esc(s)}">${esc(s)} (${s === 'Todos' ? data.videos.length : data.videos.filter(v => v.stage === s).length})</button>`).join('');
+  const list = data.videos.filter(v => filter === 'Todos' || v.stage === filter);
+  document.getElementById('videos').innerHTML = list.map(v => {
+    const sheet = v.reviewSheet || v.keyframeSheet;
+    return `<button class="video" ${v.editable ? `data-batch="${esc(v.batch)}" data-slug="${esc(v.slug)}"` : v.pending ? 'disabled title="Na fila da GPU: o vídeo abre quando as imagens-chave começarem"' : 'disabled title="Pasta aprovada (OK): não é alterada"'}>
+      ${sheet ? `<img src="${sheet}" alt="" loading="lazy">` : ''}
+      <span class="title">${esc(v.title)}</span>
+      <span><span class="chip ${stageClass(v.stage)}">${esc(v.stage)}</span>
+        ${v.expectedFinish ? `<span class="small"> · pronto ≈ ${fmtTime(v.expectedFinish)}</span>` : ''}</span>
+      <span class="small"><span class="chip">${v.format === 'video' ? 'Vídeo 16:9' : 'Short'}</span> ${esc(v.batch)} · ${v.scenes} cenas${v.duration ? ` · ${Math.round(v.duration)} s` : ''}</span>
+      <span class="row">${seoChip(v.seoStatus)}${Object.entries(v.languages).map(([l, s]) => `<span class="chip ${s === 'publicado' ? 'ok' : s === 'pronto' ? 'warn' : s === 'montando' ? 'run' : ''}">${l.toUpperCase()}: ${esc(s)}</span>`).join('')}</span>
+      ${v.publication && v.publication.slot ? `<span class="small">${v.publication.status === 'publicado' ? 'Publicado' : 'Publica'} ${fmtTime(v.publication.slot)}</span>` : ''}
+      ${v.note ? `<span class="small">Nota: ${esc(v.note)}</span>` : ''}
+    </button>`;
+  }).join('') || '<p class="empty">Nenhum vídeo nesta etapa.</p>';
+
+  const p = data.publishing;
+  const conn = p.connected
+    ? `<span class="chip ok">Canal conectado${p.channel ? `: ${esc(p.channel.title)}` : ''}</span>`
+    : p.clientSecret ? `<button class="btn primary" id="connectBtn">Conectar canal do YouTube</button>`
+    : `<span class="chip warn">Sem credencial</span> <span class="small">Salve o JSON OAuth do Google Cloud em <code>secrets/client_secret.json</code> (ver <code>publicacao_youtube.md</code>).</span>`;
+  const audit = p.auditApproved
+    ? '<span class="chip ok">Auditoria aprovada: envio liberado</span>'
+    : '<span class="chip warn">Auditoria pendente: nada é enviado</span> <span class="small">Troque para <code>- auditoria: aprovada</code> no fluxo_aprovacao.md quando o Google aprovar.</span>';
+  document.getElementById('publishing').innerHTML = `
+    <div class="row" style="margin-bottom:10px">${conn} ${audit}</div>
+    ${p.error ? `<p><span class="chip bad">Problema</span> <span class="small">${esc(p.error)}</span></p>` : ''}
+    <p>${p.cutoff ? `Só são enviados vídeos aprovados a partir de <b>${fmtTime(p.cutoff)}</b> (${new Date(p.cutoff).toLocaleDateString('pt-BR')}).`
+        : '<span class="chip bad">Sem data de corte</span> <span class="small">Nada é enviado até haver <code>- aprovados-desde:</code> válido no fluxo_aprovacao.md.</span>'}</p>
+    ${p.beforeCutoff.length ? `<p><span class="chip warn">Aprovados antes do corte (não serão enviados)</span> ${p.beforeCutoff.map(b => esc(b.title || b.slug)).join(' · ')}<br>
+      <span class="small">Para enviar, abra o vídeo e clique em "Aprovar vídeo" de novo.</span></p>` : ''}
+    <p>Playlist dos vídeos em português: <b>${esc(p.playlist || '—')}</b>
+      ${p.playlist ? (/^(sim|ativa|ativo|true)$/i.test((p.playlistActive || '').trim()) ? '<span class="chip ok">ligada</span>'
+        : '<span class="chip warn">desligada</span> <span class="small">Ligue com <code>- playlist-ativa: sim</code> depois da auditoria; os vídeos já enviados entram juntos.</span>') : ''}</p>
+    <p>${p.times.some(t => /imediat/i.test(t)) ? (p.delayMinutes && Number(p.delayMinutes) > 0 ? `<b>Envio ao aprovar</b>: o Short sobe na hora, agendado para ${esc(p.delayMinutes)} minutos depois da aprovação (ou do envio, se ele atrasar), para dar tempo de conferir no YouTube Studio.` : '<b>Publicação imediata</b>: o vídeo vai ao ar público assim que você aprova.') + ' A cota da API do YouTube permite uns 6 envios por dia; acima disso, o envio espera a cota renovar.'
+        : `Grade de ${p.times.length} horários por dia (um vídeo por horário; sem limite de envios, cada aprovado sobe na hora e os que não couberem no dia passam ao seguinte): <b>${p.times.map(esc).join(' · ') || '—'}</b> (UTC${esc(p.timezone || '?')}).`} Idiomas publicados: ${esc(p.languages || 'pt')}.</p>
+    ${p.scheduled.length ? `<table><tr><th>Enviados</th><th>Horário</th><th>Situação</th></tr>${p.scheduled.map(s => `<tr>
+      <td><b>${esc(s.slug)}</b>${s.url ? ` · <a href="${esc(s.url)}" target="_blank">abrir</a>` : ''}</td>
+      <td class="num">${fmtTime(s.slot)}</td>
+      <td><span class="chip ${s.status === 'erro' ? 'bad' : s.status === 'agendado' ? 'ok' : 'run'}">${s.status === 'agendado' ? 'publicado' : esc(s.status)}${s.status === 'enviando' && s.progress != null ? ` ${s.progress}%` : ''}</span>
+        ${s.error ? `<div class="small">${esc(s.error)}</div>` : ''}${s.warning ? `<div class="small">${esc(s.warning)}</div>` : ''}</td></tr>`).join('')}</table>` : ''}
+    ${p.queue.length ? `<table><tr><th>Fila de publicação (aprovados)</th><th>Horário previsto</th></tr>${p.queue.map(q => `<tr>
+      <td>${esc(q.title || q.slug)}</td><td class="num">${fmtTime(q.slot)}</td></tr>`).join('')}</table>`
+      : '<p class="small">Nenhum vídeo aprovado aguardando envio.</p>'}
+    <p class="small">Edite horários, fuso e auditoria em <code>fluxo_aprovacao.md</code>.</p>`;
+
+  const f = data.failures;
+  document.getElementById('failuresBox').hidden = !f.length;
+  document.getElementById('failures').innerHTML = f.map(x =>
+    `<p><span class="chip bad">${kindLabel(x.kind)}</span> <b>${esc(x.slug)}</b> <span class="small">job ${esc(x.id)} · ${fmtTime(x.finishedAt)}</span><br><span class="small">${esc(x.error || '')}</span></p>`).join('');
+}
+
+function renderDetail(d) {
+  current = d;
+  const busy = d.busy, hasVideo = !!d.videos.pt, hasSheet = !!d.keyframeSheet;
+  const dis = busy ? 'disabled title="Há um job deste vídeo rodando ou na fila"' : '';
+  const sel = [...selected].sort((a, b) => a - b);
+  const meta = d.metadata || {};
+  const pub = d.publication;
+  const sent = pub && ['enviando', 'agendado', 'publicado'].includes(pub.status);
+  const players = Object.entries(d.videos).filter(([, url]) => url).map(([l, url]) =>
+    `<div><div class="small">${LANG[l]}</div><video controls preload="metadata" src="${url}"></video></div>`).join('');
+  document.getElementById('sheet').innerHTML = `
+    <div class="sheet-head">
+      <div><h3 id="detailTitle">${esc(d.title || d.slug)}</h3>
+        <div class="row" style="margin-top:6px"><span class="chip ${stageClass(d.stage)}">${esc(d.stage)}</span>
+        <span class="chip">${d.format === 'video' ? 'Vídeo 16:9 · publicação manual no Studio' : 'Short'}</span>
+        <span class="small">${esc(d.batch)} / ${esc(d.slug)} · ${d.scenes.length} cenas</span></div>
+        ${d.thumbnail ? `<div class="row" style="margin-top:8px"><a href="${d.thumbnail}" target="_blank"><img src="${d.thumbnail}" alt="Capa" style="width:320px;border-radius:6px;border:1px solid var(--line)"></a>
+          <button class="btn" data-act="refazer_capa" ${d.busy ? 'disabled' : ''}>Refazer capa</button></div>` : ''}
+        ${d.review.note ? `<p class="small">Última nota: ${esc(d.review.note)}</p>` : ''}</div>
+      <button class="btn" id="closeDetail">Fechar</button>
+    </div>
+
+    <div>
+      <h2>Decisão</h2>
+      <div class="row">
+        ${hasSheet && !hasVideo ? `<button class="btn primary" data-act="aprovar_imagens" ${dis}>Aprovar imagens-chave e animar</button>` : ''}
+        ${hasVideo && !sent && d.format !== 'video' ? `<button class="btn primary" data-state="Aprovado" ${dis}>Aprovar vídeo</button>` : ''}
+        ${!sent ? `<button class="btn" data-state="Ajustes" ${dis}>Pedir ajustes</button>
+        <button class="btn danger" data-state="Rejeitado" ${dis}>Rejeitar</button>` : ''}
+        ${!pub || !(pub.videoId || ['enviando', 'agendado', 'publicado'].includes(pub.status))
+          ? `<button class="btn danger" data-act="excluir_video" ${dis}>Excluir vídeo</button>` : ''}
+      </div>
+      <p class="small">"Aprovar vídeo" coloca o vídeo na fila de publicação: ele é enviado ao YouTube já agendado para o próximo horário livre (depois da auditoria). Ajustes de texto ou de prompt continuam sendo pedidos no chat.</p>
+    </div>
+
+    ${pub ? `<div>
+      <h2>Publicação</h2>
+      <div class="row"><span class="chip ${pub.status === 'erro' ? 'bad' : pub.status === 'cancelado' ? 'warn' : 'ok'}">${pub.status === 'agendado' ? 'publicado' : esc(pub.status)}</span>
+        ${pub.slot ? `<span>${pub.status === 'publicado' ? 'no ar desde' : 'vai ao ar em'} <b>${fmtTime(pub.slot)}</b></span>` : ''}
+        ${pub.url ? `<a href="${esc(pub.url)}" target="_blank">${esc(pub.url)}</a>` : ''}
+        ${pub.source === 'manual' ? '<span class="small">publicado por você antes do painel</span>' : ''}</div>
+      ${pub.error ? `<p class="small">Erro: ${esc(pub.error)}</p>` : ''}${pub.warning ? `<p class="small">${esc(pub.warning)}</p>` : ''}
+      <div class="row" style="margin-top:8px">
+        ${pub.status === 'agendado' ? '<button class="btn danger" data-act="cancelar_publicacao">Cancelar publicação (deixar privado)</button>' : ''}
+        ${pub.status === 'publicado' && pub.videoId && !pub.commentId ? '<button class="btn" data-act="publicar_comentario">Publicar comentário sugerido</button>' : ''}
+        ${pub.commentId ? '<span class="small">Comentário publicado; fixe-o no YouTube Studio.</span>' : ''}
+        ${pub.playlistItemId ? `<span class="chip ok">na playlist ${esc(pub.playlist || '')}</span>` : ''}
+        ${pub.playlistError ? `<span class="small">Playlist: ${esc(pub.playlistError)}</span>` : ''}
+      </div></div>` : ''}
+
+    ${players ? `<div><h2>Vídeo</h2><div class="players">${players}</div>
+      <div class="row" style="margin-top:10px">
+        ${Object.entries(d.languages).map(([l, s]) => `<button class="btn" data-lang="${l}" ${!hasVideo || !s.translation || s.building ? 'disabled' : ''}>
+          ${s.building ? `Montando ${l.toUpperCase()}…` : `Remontar ${l.toUpperCase()}`}</button>`).join('')}
+        ${d.reviewSheet ? `<a href="${d.reviewSheet}" target="_blank">folha de revisão da animação</a>` : ''}
+      </div></div>` : ''}
+
+    <div>
+      <h2>Cenas</h2>
+      <div class="row" style="margin-bottom:10px">
+        <span class="small">${sel.length ? `Selecionadas: ${sel.join(', ')}` : 'Clique nas cenas para selecionar.'}</span>
+        <button class="btn" data-act="refazer_cenas" ${!sel.length || busy ? 'disabled' : ''}>Refazer imagens selecionadas</button>
+        ${hasVideo ? `<button class="btn" data-act="reanimar_cenas" ${!sel.length || busy ? 'disabled' : ''}>Reanimar selecionadas</button>` : ''}
+        ${d.keyframeSheet ? `<a href="${d.keyframeSheet}" target="_blank">folha de imagens-chave</a>` : ''}
+      </div>
+      <div class="scenes">${d.scenes.map(s => `
+        <div class="scene ${selected.has(s.number) ? 'selected' : ''} ${d.format === 'video' ? 'wide' : ''}" data-scene="${s.number}">
+          ${s.keyframe ? `<img src="${s.keyframe}" alt="Imagem-chave da cena ${s.number}" loading="lazy">` : '<div class="small">sem imagem-chave</div>'}
+          <div class="row"><b>${s.number}.</b> <span class="small">${esc(s.caption || '')}</span>${s.animated ? '<span class="chip ok">animada</span>' : ''}</div>
+          <p>${esc(s.narration)}</p>
+          ${Object.entries(s.translations).filter(([, t]) => t).map(([l, t]) => `<details><summary>${l.toUpperCase()}</summary><p>${esc(t)}</p></details>`).join('')}
+          <button class="btn danger" data-remove="${s.number}" ${busy ? 'disabled' : ''}>Remover cena</button>
+        </div>`).join('')}</div>
+    </div>
+
+    <div>
+      <h2>Metadados (português)</h2>
+      <form class="meta" id="metaForm">
+        <label class="full">Título<input name="title" maxlength="100" value="${esc(meta.title || '')}"></label>
+        <label class="full">Descrição<textarea name="description" rows="6">${esc(meta.description || '')}</textarea></label>
+        <label>Hashtags (separadas por vírgula)<input name="hashtags" value="${esc((meta.hashtags || []).join(', '))}"></label>
+        <label>Tags (separadas por vírgula)<input name="tags" value="${esc((meta.tags || []).join(', '))}"></label>
+        <label class="full">Comentário fixado<textarea name="pinned_comment" rows="2">${esc(meta.pinnedCommentSuggestion || '')}</textarea></label>
+        <div class="full"><button class="btn primary" type="submit">Salvar metadados</button></div>
+      </form>
+    </div>`;
+}
+
+async function openVideo(batch, slug) {
+  const r = await fetch(`/api/video?batch=${encodeURIComponent(batch)}&slug=${encodeURIComponent(slug)}`);
+  const d = await r.json();
+  if (!r.ok) { toast(d.error || 'Vídeo não encontrado.'); return; }
+  if (!current || current.slug !== slug || current.batch !== batch) selected.clear();
+  renderDetail(d); document.getElementById('detail').classList.add('open');
+}
+function closeVideo() { document.getElementById('detail').classList.remove('open'); current = null; selected.clear(); }
+
+document.getElementById('videos').addEventListener('click', e => {
+  const b = e.target.closest('button.video[data-slug]'); if (b) openVideo(b.dataset.batch, b.dataset.slug);
+});
+document.getElementById('detail').addEventListener('click', e => {
+  if (e.target.id === 'detail' || e.target.id === 'closeDetail') return closeVideo();
+  const t = e.target;
+  if (t.dataset.act === 'aprovar_imagens') return act('aprovar_imagens', {}, 'Aprovar as imagens-chave e colocar a animação na fila (2 a 3 h de GPU)?');
+  if (t.dataset.act === 'refazer_cenas') return act('refazer_cenas', { scenes: [...selected] });
+  if (t.dataset.act === 'reanimar_cenas') return act('reanimar_cenas', { scenes: [...selected] }, `Reanimar as cenas ${[...selected].join(', ')} e remontar o vídeo?`);
+  if (t.dataset.lang) return act('remontar_idioma', { language: t.dataset.lang });
+  if (t.dataset.act === 'excluir_video') {
+    if (!confirm(`Excluir "${current.title || current.slug}" de vez?\n\nApaga a pasta do vídeo (roteiro, imagens, áudios, clipes, traduções e metadados), os jobs e os arquivos em output/. Não dá para desfazer.`)) return;
+    return post('/api/acao', { action: 'excluir_video', batch: current.batch, slug: current.slug })
+      .then(r => { toast(r.message, 6000); closeVideo(); refresh(); })
+      .catch(e => toast('Não foi possível: ' + e.message, 8000));
+  }
+  if (t.dataset.act === 'refazer_capa') return act('refazer_capa', {}, 'Gerar outra ilustração para a capa?');
+  if (t.dataset.act === 'cancelar_publicacao') return act('cancelar_publicacao', {}, 'Cancelar a publicação? O vídeo fica privado no YouTube (não é apagado) e sai da grade.');
+  if (t.dataset.act === 'publicar_comentario') return act('publicar_comentario', {}, 'Publicar o comentário sugerido no vídeo?');
+  if (t.dataset.remove) return act('remover_cena', { scene: Number(t.dataset.remove) }, `Remover a cena ${t.dataset.remove}? As seguintes serão renumeradas.`);
+  if (t.dataset.state) {
+    if (t.dataset.state === 'Rejeitado' && !confirm('Rejeitar este vídeo? Ele sai do painel na hora e, em seguida, TODOS os arquivos dele são apagados (cenas, vídeos, traduções e cópias em output/). Não dá para desfazer. Se alguma versão já estiver publicada, os arquivos ficam no disco e o vídeo só sai da tela.')) return;
+    const note = t.dataset.state === 'Aprovado' ? '' : prompt(`Nota para "${t.dataset.state}" (opcional):`, '');
+    if (note === null) return;
+    return act('definir_estado', { stage: t.dataset.state, note });
+  }
+  const scene = t.closest('.scene');
+  if (scene && !t.closest('button, details, a')) {
+    const n = Number(scene.dataset.scene); selected.has(n) ? selected.delete(n) : selected.add(n); renderDetail(current);
+  }
+});
+document.getElementById('detail').addEventListener('submit', e => {
+  if (e.target.id !== 'metaForm') return;
+  e.preventDefault(); act('salvar_metadados', { fields: Object.fromEntries(new FormData(e.target)) });
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && current) closeVideo(); });
+
+function fillProfiles() {
+  const sel = document.getElementById('profileSelect');
+  const identity = document.getElementById('identitySelect')?.value || '';
+  const list = lastCharacters.filter(c => !identity || c.identity === identity);
+  const ids = identity + ':' + list.map(c => c.id).join('|');
+  if (!sel || sel.dataset.ids === ids) return;
+  const keep = sel.value;
+  sel.innerHTML = list.map((c, i) => `<option value="${esc(c.id)}">${esc(c.label)}${i === 0 ? ' (padrão)' : ''}</option>`).join('');
+  if (keep && list.some(c => c.id === keep)) sel.value = keep;
+  sel.dataset.ids = ids;
+}
+document.getElementById('identitySelect').addEventListener('change', fillProfiles);
+// Depois de "Limpar" o formulário, os seletores voltam ao primeiro item: refaz a lista de personagens.
+document.getElementById('loteForm').addEventListener('reset', () => setTimeout(fillProfiles));
+
+document.getElementById('loteForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = Object.fromEntries(new FormData(e.target));
+  const who = document.getElementById('profileSelect').selectedOptions[0]?.textContent.replace(' (padrão)', '') || f.profile;
+  const look = document.getElementById('identitySelect').selectedOptions[0]?.textContent.replace(' (atual)', '') || f.identity;
+  if (!confirm(`Iniciar lote de ${f.quantity} ${f.format === 'video' ? 'vídeo(s) HORIZONTAL(IS)' : 'Short(s)'} com ${who} (${look})${f.theme ? ` sobre "${f.theme}"` : ''}?`)) return;
+  try { const r = await post('/api/lote', { quantity: Number(f.quantity), theme: f.theme, format: f.format, profile: f.profile, identity: f.identity, gpu: f.gpu }); toast(r.message); e.target.reset(); refresh(); }
+  catch (err) { toast('Não foi possível: ' + err.message, 7000); }
+});
+document.getElementById('envCheck').addEventListener('click', async e => {
+  if (e.target.id !== 'recheckEnv') return;
+  try { await post('/api/verificar', {}); toast('Ambiente verificado.'); refresh(); }
+  catch (err) { toast('Não foi possível: ' + err.message, 7000); }
+});
+document.getElementById('status').addEventListener('click', async e => {
+  if (e.target.id !== 'stopComfy') return;
+  if (!confirm('Desligar o ComfyUI agora? Libera a GPU e a memória; ele liga sozinho quando entrar um vídeo local.')) return;
+  e.target.disabled = true;
+  try { const r = await post('/api/acao', { action: 'desligar_comfyui' }); toast(r.message, 7000); refresh(); }
+  catch (err) { toast('Não foi possível: ' + err.message, 7000); e.target.disabled = false; }
+});
+document.getElementById('remoteGpu').addEventListener('click', async e => {
+  if (e.target.id !== 'stopRemote') return;
+  if (!confirm('Desligar a GPU remota agora? Ela para de cobrar por hora (o disco continua salvo) e liga sozinha quando entrar um vídeo remoto.')) return;
+  try { const r = await post('/api/acao', { action: 'desligar_gpu_remota' }); toast(r.message, 7000); refresh(); }
+  catch (err) { toast('Não foi possível: ' + err.message, 7000); }
+});
+document.getElementById('queue').addEventListener('click', async e => {
+  const b = e.target.closest('button[data-jobact]');
+  if (!b) return;
+  if (b.dataset.jobact === 'cancelar_job' && !confirm(`Cancelar este job e EXCLUIR o vídeo "${b.dataset.slug}" com todos os arquivos (cenas, imagens, clipes, áudios, traduções e cópias em output/)? Não dá para desfazer.`)) return;
+  try { const r = await post('/api/acao', { action: b.dataset.jobact, job: b.dataset.job }); toast(r.message, 7000); refresh(); }
+  catch (err) { toast('Não foi possível: ' + err.message, 7000); }
+});
+document.getElementById('langCleanBtn').addEventListener('click', async () => {
+  if (!confirm('Apagar, nas pastas de trabalho, traduções (translation-*.json) e vídeos/áudios dos idiomas desativados em fluxo_aprovacao.md? Os arquivos em output/ não são tocados. Não dá para desfazer.')) return;
+  try { const r = await post('/api/acao', { action: 'limpar_idiomas_desligados' }); toast(r.message, 7000); refresh(); }
+  catch (e) { toast(e.message); }
+});
+document.getElementById('archiveBtn').addEventListener('click', async () => {
+  if (!confirm('Mover para output/archive tudo que tem "OK - " em output/shorts e output/videos (vídeo, texto e capa)?\n\nOs vídeos arquivados (PT e idiomas ativos) terão as pastas de trabalho (cenas, quadros, clipes, áudios) apagadas e sairão da tela. Os arquivos finais em output/ não são tocados. Não dá para desfazer.')) return;
+  try { const r = await post('/api/acao', { action: 'arquivar_publicados' }); toast(r.message, 7000); refresh(); }
+  catch (err) { toast('Não foi possível: ' + err.message, 7000); }
+});
+document.getElementById('publishing').addEventListener('click', async e => {
+  if (e.target.id !== 'connectBtn') return;
+  try { const r = await post('/api/acao', { action: 'conectar_canal' }); toast(r.message, 8000); }
+  catch (err) { toast('Não foi possível: ' + err.message, 7000); }
+});
+document.getElementById('filters').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  filter = b.dataset.s; try { localStorage.setItem('painel.filter', filter); } catch {}
+  if (last) render(last);
+});
+try { filter = localStorage.getItem('painel.filter') || 'Todos'; } catch {}
+
+async function refresh() {
+  try { const r = await fetch('/api/estado'); render(await r.json()); }
+  catch { document.getElementById('status').textContent = 'Painel sem resposta: o servidor local está rodando?'; }
+}
+refresh(); setInterval(refresh, 30000);
+
+// Medidores de 0 a 100 (% ou °C). A temperatura da GPU fica vermelha acima de 85 °C.
+const GPU_HOT = 85;
+function gauge(label, value, unit, sub, hot = false, limit = null) {
+  const v = value == null ? 0 : Math.max(0, Math.min(100, value));
+  const arc = 'M20 100 A80 80 0 0 1 180 100';
+  const tick = limit == null ? '' : (() => {
+    const a = Math.PI * (1 - limit / 100), c = Math.cos(a), s = Math.sin(a);
+    return `<line class="limit" x1="${100 + 62 * c}" y1="${100 - 62 * s}" x2="${100 + 98 * c}" y2="${100 - 98 * s}"/>`;
+  })();
+  return `<div class="gauge ${hot ? 'hot' : ''}" role="meter" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${value ?? ''}">
+    <svg viewBox="0 0 200 112">
+      <path class="track" d="${arc}" fill="none" stroke-width="18" stroke-linecap="round"/>
+      <path class="bar" d="${arc}" fill="none" stroke-width="18" stroke-linecap="round" pathLength="100" stroke-dasharray="${v} 100"/>
+      ${tick}
+      <text class="value" x="100" y="96" text-anchor="middle">${value == null ? '—' : Math.round(value) + unit}</text>
+    </svg>
+    <div class="label">${esc(label)}</div><div class="small">${sub}</div></div>`;
+}
+async function refreshGauges() {
+  try {
+    const u = await (await fetch('/api/sistema')).json(), g = u.gpu;
+    document.getElementById('gauges').innerHTML = [
+      gauge('GPU', g && g.utilization, '%', g ? `VRAM ${g.vramUsedGb} de ${g.vramTotalGb} GB` : 'sem GPU NVIDIA'),
+      gauge('CPU', u.cpu, '%', 'todos os núcleos'),
+      gauge('Memória', u.memory, '%', `${u.memoryUsedGb} de ${u.memoryTotalGb} GB`),
+      gauge('Temperatura da GPU', g && g.temperature, ' °C', g && g.temperature > GPU_HOT ? `acima de ${GPU_HOT} °C` : `alerta acima de ${GPU_HOT} °C`,
+        !!(g && g.temperature > GPU_HOT), GPU_HOT),
+    ].join('');
+  } catch { /* o aviso de painel sem resposta já aparece no topo */ }
+}
+refreshGauges(); setInterval(refreshGauges, 3000);
+// Link direto: #video=<lote>/<slug> abre a revisão do vídeo; #publicacao rola até a grade.
+(function openFromHash() {
+  const m = location.hash.match(/^#video=([^/]+)\/(.+)$/);
+  if (m) openVideo(decodeURIComponent(m[1]), decodeURIComponent(m[2]));
+  else if (location.hash === '#publicacao') setTimeout(() => document.getElementById('publishing').scrollIntoView(), 800);
+})();
+</script>
+</body>
+</html>

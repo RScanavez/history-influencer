@@ -1,0 +1,32 @@
+{
+  "_comentario": "Configuração do ComfyUI por placa de vídeo. O perfil é escolhido pelo nome da GPU (campo 'gpu', trecho do nome no nvidia-smi); a variável INFLUENCER_GPU_PROFILE força um perfil e COMFYUI_SPEED=0 desliga toda a aceleração. Sem perfil que combine, vale 'padrao'. Regra do usuário (2026-10-08): ao rodar o app numa placa nova, crie um perfil próprio, análogo a estes, com as configurações específicas e as lições aprendidas nela.",
+  "rtx3070": {
+    "gpu": "RTX 3070",
+    "descricao": "RTX 3070 Laptop, 8 GB de VRAM, 32 GB de RAM. ComfyUI v0.37.4 em venv-v037 (PyTorch 2.14 cu126).",
+    "comfyuiFast": [],
+    "sageAttention": false,
+    "licoes": [
+      "2026-10-08: com --fast fp16_accumulation toda animação falhava no KSamplerAdvanced (mat1 and mat2 shapes cannot be multiplied, ex. 28080x13824 e 11340x5120). O atalho fp16_linear do ComfyUI usa o peso GGUF do Wan sem descompactar (11340 = 13824 em bytes Q6_K). Sem a flag, o Wan roda a ~66 s por passo.",
+      "SageAttention não instalado: a recomendação \"triton-windows<3.8\" foi testada só na 5070; aqui não há ganho medido que justifique o risco.",
+      "Com 8 GB de VRAM o Wan 14B Q4_K_M fica quase todo fora da GPU (~9,3 GB descarregados para a RAM); o ComfyUI ocupa ~16 GB de RAM com o codificador de texto. Normal, não é vazamento."
+    ]
+  },
+  "rtx5070": {
+    "gpu": "RTX 5070",
+    "descricao": "RTX 5070 Laptop (Blackwell): só roda com o PyTorch de CUDA 12.8 (cu128, o install.ps1 escolhe sozinho).",
+    "comfyuiFast": ["fp16_accumulation"],
+    "sageAttention": true,
+    "licoes": [
+      "2026-10-07: atenção 3,8x mais rápida com SageAttention e cálculo em fp16; passo do Wan de ~49 s para ~27 s. SageAttention: pip install \"triton-windows<3.8\" sageattention no ambiente do ComfyUI.",
+      "2026-10-08: na 3070 o fp16_accumulation quebrou o Wan GGUF (veja rtx3070). Se aparecer 'mat1 and mat2 shapes cannot be multiplied' aqui, tire fp16_accumulation de comfyuiFast.",
+      "2026-10-09: ASUS TUF A16 (FA608UP) com AMD Radeon 780M integrada. No modo de GPU 'Ultimate' do Armoury Crate a 5070 desenha a tela (2560x1600 a 165 Hz) e todo o desktop (Explorer, Edge, VS Code): ~1,4 GB de VRAM ocupados sem nada gerando, tirados do Wan. No modo 'Padrão' (híbrido) a 780M desenha a tela e a 5070 fica só para o ComfyUI (CUDA vai para a NVIDIA de qualquer jeito). A 780M não roda Wan nem SDXL (sem CUDA; usa a RAM do sistema).",
+      "2026-10-09: Real-ESRGAN ncnn-vulkan (C:\\Influencer\\tools\\realesrgan) na 780M (-g 1): realesr-animevideov3 x2 ~2,6 quadros/s e x3 ~2,2 (daria conta em paralelo com o Wan), mas endurece os borrões do rosto do Wan (barba e olhos viram manchas pintadas) e ficou pior que o RealESRGAN_x2plus atual. realesrgan-x4plus na 780M: 0,09 quadro/s, inviável. Conclusão: a qualidade se perde no quadro bruto do Wan (480x832, 4 passos), não na ampliação."
+    ]
+  },
+  "padrao": {
+    "descricao": "Placa sem perfil próprio: sem aceleração, a configuração mais segura. Crie um perfil para ela.",
+    "comfyuiFast": [],
+    "sageAttention": false,
+    "licoes": []
+  }
+}

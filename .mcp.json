@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "influencer-local": {
+      "type": "stdio",
+      "command": "${INFLUENCER_ROOT:-D:\\Historiador}\\.venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "influencer_mcp"
+      ],
+      "cwd": "${INFLUENCER_ROOT:-D:\\Historiador}",
+      "env": {
+        "COMFYUI_URL": "http://127.0.0.1:8188",
+        "COMFYUI_CHECKPOINT": "${COMFYUI_CHECKPOINT:-Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors}",
+        "COMFYUI_SCENE_CHECKPOINT": "${COMFYUI_SCENE_CHECKPOINT:-Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors}",
+        "COMFYUI_OPENPOSE_CONTROLNET": "${COMFYUI_OPENPOSE_CONTROLNET:-xinsir-openpose-sdxl.safetensors}",
+        "COMFYUI_SCENE_LORA": "Canopus-Pencil-Art-LoRA.safetensors",
+        "COMFYUI_SCENE_LORA_STRENGTH": "0.6",
+        "MEDIAPIPE_POSE_MODEL_PATH": "${MEDIAPIPE_POSE_MODEL_PATH:-}",
+        "PIPER_EXECUTABLE": "${PIPER_EXECUTABLE:-piper}",
+        "PIPER_MODEL_PATH": "${PIPER_MODEL_PATH:-}",
+        "FFMPEG_EXECUTABLE": "${FFMPEG_EXECUTABLE:-ffmpeg}",
+        "FFPROBE_EXECUTABLE": "${FFPROBE_EXECUTABLE:-ffprobe}",
+        "TTS_ENGINE": "kokoro",
+        "KOKORO_VOICE": "pm_santa",
+        "KOKORO_SPEED": "1.0",
+        "KOKORO_PYTHON": "${KOKORO_PYTHON:-D:\\Influencer\\tools\\tts\\venv\\Scripts\\python.exe}",
+        "INFLUENCER_NAME": "Historiador",
+        "INFLUENCER_GPU_LOCK": "${INFLUENCER_GPU_LOCK:-D:\\Influencer\\Influencer\\generated\\jobs\\gpu.lock}",
+        "COMFYUI_DIR": "${COMFYUI_DIR:-D:\\Influencer\\tools\\ComfyUI}"
+      }
+    }
+  }
+}

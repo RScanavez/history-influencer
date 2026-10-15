@@ -1,0 +1,20 @@
+.venv/
+*.egg-info/
+__pycache__/
+*.py[cod]
+generated/
+.env
+output/
+# Credencial OAuth e token do canal do YouTube (dão acesso ao canal)
+secrets/
+
+
+# Log local de assuntos já usados
+assuntos.md
+
+/Influencer/
+/tools/
+
+# Candidatos de rosto e referências antigas (só os rostos escolhidos vão para o git)
+personagens/candidatos/
+personagens/anteriores/

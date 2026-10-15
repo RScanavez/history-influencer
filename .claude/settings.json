@@ -1,0 +1,17 @@
+{
+  "model": "sonnet",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".venv/Scripts/python.exe scripts/check_mcp.py",
+            "timeout": 30,
+            "statusMessage": "Verificando MCP influencer-local..."
+          }
+        ]
+      }
+    ]
+  }
+}
