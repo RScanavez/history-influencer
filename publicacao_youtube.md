@@ -31,7 +31,7 @@ Claude: você cria a conta, baixa a credencial e autoriza o canal.
 2. Tipo de aplicativo: **App para computador** (Desktop). Nome: `History-Advisor`.
 3. Clique em **Baixar JSON** e salve o arquivo como:
 
-   `D:\Influencer\Influencer\secrets\client_secret.json`
+   `D:\Historiador\secrets\client_secret.json`
 
    A pasta `secrets/` está no `.gitignore`: não vai para o GitHub. Não envie esse arquivo a ninguém.
 
