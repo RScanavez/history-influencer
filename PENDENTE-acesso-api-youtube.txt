@@ -1,0 +1,83 @@
+PENDENTE: acesso à YouTube Data API para a conta nova (History-Advisor)
+=========================================================================
+Anotado em 2026-10-15. Fazer tudo logado na conta Google dona do novo canal.
+O que libera os envios públicos (em vez de presos como privados) é a auditoria
+do passo 3; o site do passo 1 serve de página inicial e política de privacidade
+nesse pedido. Caminho da credencial no código: D:\Historiador\secrets\client_secret.json
+
+
+1. SITE NO GOOGLE SITES (página inicial + política de privacidade)
+------------------------------------------------------------------
+1. https://sites.google.com -> "Em branco".
+2. Nome do site: History-Advisor. Página inicial: duas ou três frases dizendo
+   o que é o app (ferramenta pessoal que envia vídeos ao canal do próprio dono),
+   quem usa (só você) e o e-mail de contato.
+3. Segunda página "Privacy Policy" (ou Política de Privacidade) com, no mínimo:
+   - O app usa a YouTube API Services; ao usar, o usuário aceita os Termos de
+     Serviço do YouTube (https://www.youtube.com/t/terms) e a Política de
+     Privacidade do Google (https://policies.google.com/privacy).
+   - Dados acessados: token de autorização e metadados dos vídeos que você envia.
+   - Onde ficam: só no computador do dono, em arquivo local. Nada vai a terceiros
+     nem é usado para publicidade.
+   - Como revogar: https://myaccount.google.com/permissions
+   - E-mail de contato.
+4. Publicar. Endereço: history-advisor. Isso gera
+   https://sites.google.com/view/history-advisor e
+   https://sites.google.com/view/history-advisor/privacy-policy
+   (se o nome estiver ocupado, escolher outro e corrigir em publicacao_youtube.md).
+5. Visibilidade: "qualquer pessoa com o link".
+
+
+2. GOOGLE CLOUD, CONSENTIMENTO E CREDENCIAL
+-------------------------------------------
+Seguir as seções 1 a 4 de publicacao_youtube.md (já com os nomes novos).
+Pontos onde costuma travar:
+1. Projeto: https://console.cloud.google.com -> novo projeto History-Advisor.
+   ANOTAR O NÚMERO DO PROJETO (página inicial do projeto); o formulário pede.
+2. API: Biblioteca -> YouTube Data API v3 -> Ativar.
+3. Google Auth Platform -> Branding: nome History-Advisor, e-mail de suporte,
+   página inicial e política de privacidade (links do passo 1),
+   "google.com" em domínios autorizados.
+4. Público: Externo. Usuários de teste: seu e-mail. Depois "Publicar app"
+   (produção). NÃO pedir verificação de marca (outro processo, desnecessário).
+5. Acesso a dados: escopo https://www.googleapis.com/auth/youtube.force-ssl
+6. Clientes: cliente OAuth tipo "App para computador", nome History-Advisor,
+   baixar JSON e salvar em D:\Historiador\secrets\client_secret.json
+   (criar a pasta secrets se não existir; ela está no .gitignore).
+7. No painel (abrir-painel.cmd): "Conectar canal do YouTube". Aceitar o aviso
+   de app não verificado. O painel mostra o nome do canal.
+
+
+3. PEDIDO DE AUDITORIA (libera os envios públicos)
+--------------------------------------------------
+Sem isso, todo vídeo enviado pela API fica privado. Mesmo formulário do
+aumento de cota.
+1. https://support.google.com/youtube/contact/yt_api_form (logado na conta do canal).
+2. Respostas (adaptar ao formulário atual):
+   - Tipo de pedido: auditoria de conformidade (compliance audit). Cota: manter
+     a padrão por enquanto (10.000/dia = ~6 envios).
+   - Número do projeto: o anotado no passo 2.
+   - Nome do app: History-Advisor. Site e política de privacidade: links do passo 1.
+   - Descrição do uso: ferramenta pessoal, de código próprio, que envia vídeos
+     curtos de história ao canal do próprio dono (título, descrição, tags) e lê
+     o status dos envios. Um único usuário, sem dados de terceiros, sem servidor.
+   - Escopos: youtube.force-ssl.
+     Métodos: videos.insert, videos.list, commentThreads.insert,
+     playlistItems.insert (incluir já; no projeto anterior ficou de fora e
+     precisou de segundo pedido).
+   - Dados do usuário: só o token OAuth, guardado localmente. Sem compartilhar,
+     vender ou usar para publicidade.
+3. Prova de funcionamento: capturas de tela ou vídeo curto mostrando o login e
+   um envio pelo painel. Pode ser um vídeo não listado no próprio canal, com o
+   link no formulário. (Enquanto a auditoria não vem, um envio de teste sobe
+   privado e serve como prova.)
+4. Enviar. Resposta por e-mail em 1 a 4 semanas, muitas vezes com perguntas.
+   Responder pelo mesmo e-mail, sem mudar o número do projeto.
+5. Com a aprovação, trocar em fluxo_aprovacao.md a linha
+   "- auditoria: pendente" para "- auditoria: aprovada". Até lá o painel segura
+   os envios na fila, de propósito.
+
+Observações:
+- Os rótulos do console mudam com frequência; se um botão não aparecer com o
+  nome acima, usar a busca do console pelo conceito.
+- Falta acrescentar a seção da auditoria como passo 5 em publicacao_youtube.md.
