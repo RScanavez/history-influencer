@@ -27,7 +27,7 @@ Requisitos: Windows 10/11, cerca de 70 GB livres e uma conta do Claude; GPU NVID
 
 Cada computador tem o seu próprio painel, fila e pasta `generated\`; os dois usam o mesmo canal do YouTube.
 
-1. No PowerShell: `git clone https://github.com/RScanavez/history-influencer.git D:Historiador`
+1. No PowerShell: `git clone https://github.com/RScanavez/history-influencer.git D:\Historiador`
    (mesmo caminho do primeiro computador; as anotações do Claude ficam ligadas a ele).
 2. Rode `install.cmd`. Ele detecta a placa: RTX 50 (Blackwell, ex.: RTX 5070) usa o PyTorch de CUDA 12.8
    automaticamente; com duas GPUs, o ComfyUI usa a de mais memória (variável `COMFYUI_CUDA_DEVICE`, que pode ser
