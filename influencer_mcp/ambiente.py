@@ -13,6 +13,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from .sensores_mac import chip_temperature
 from .winproc import quiet, venv_python
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -71,10 +72,20 @@ def check_all() -> dict[str, Any]:
     return {"checkedAt": datetime.now(UTC).isoformat(timespec="seconds"), "local": local_gpu()}
 
 
+def memory_pressure() -> str:
+    """Pressão de memória do macOS (a mesma do Activity Monitor): normal, atenção ou crítica."""
+    try:
+        level = int(subprocess.run(["sysctl", "-n", "kern.memorystatus_vm_pressure_level"], capture_output=True,
+                                   text=True, timeout=5).stdout.strip())
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return "normal"
+    return {1: "normal", 2: "atenção", 4: "crítica"}.get(level, "normal")
+
+
 def apple_gpu_usage(total_memory_gb: float) -> dict[str, Any] | None:
     """Uso da GPU do Apple Silicon lido do IOAccelerator (ioreg não pede sudo). A GPU usa a memória unificada, então
-    "vram" é a memória do sistema alocada para ela. O macOS não expõe a temperatura sem sudo (powermetrics); no lugar
-    dela vai o estado térmico (`pmset -g therm`): "ok" ou "limitada" quando o sistema reduz a velocidade."""
+    "vram" é a memória do sistema alocada para ela. A temperatura é a do die do chip (sensores_mac, sem sudo); o
+    estado térmico (`pmset -g therm`) diz se o sistema está reduzindo a velocidade ("limitada")."""
     try:
         text = subprocess.run(["ioreg", "-r", "-d", "1", "-w0", "-c", "IOAccelerator"], capture_output=True, text=True,
                               timeout=5).stdout
@@ -83,7 +94,8 @@ def apple_gpu_usage(total_memory_gb: float) -> dict[str, Any] | None:
     except (OSError, subprocess.SubprocessError, AttributeError):
         return None
     limited = any(int(value) < 100 for value in re.findall(r"(?:CPU_Speed_Limit|GPU_Speed_Limit)\s*=\s*(\d+)", thermal))
-    return {"name": apple_chip_name(), "utilization": float(stats.get("Device Utilization %", 0)), "temperature": None,
+    return {"name": apple_chip_name(), "utilization": float(stats.get("Device Utilization %", 0)),
+            "temperature": chip_temperature(),
             "thermal": "limitada" if limited else "ok",
             "vramUsedGb": round(int(stats.get("Alloc system memory", 0)) / 2**30, 1), "vramTotalGb": total_memory_gb}
 
@@ -101,6 +113,9 @@ def system_usage() -> dict[str, Any]:
     usage: dict[str, Any] = {"cpu": psutil.cpu_percent(interval=0.5), "memory": memory.percent,
                              "memoryUsedGb": round(memory.used / 2**30, 1), "memoryTotalGb": round(memory.total / 2**30, 1),
                              "gpu": None}
+    if sys.platform == "darwin":
+        usage["memoryPressure"] = memory_pressure()
+        usage["swapUsedGb"] = round(psutil.swap_memory().used / 2**30, 1)
     if apple_silicon():
         usage["gpu"] = apple_gpu_usage(usage["memoryTotalGb"])
         return usage
