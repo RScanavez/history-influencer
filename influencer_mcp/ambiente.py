@@ -4,6 +4,7 @@ ou NVIDIA via nvidia-smi) e se o ComfyUI está instalado. Se não, a fila de ví
 from __future__ import annotations
 
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -70,10 +71,27 @@ def check_all() -> dict[str, Any]:
     return {"checkedAt": datetime.now(UTC).isoformat(timespec="seconds"), "local": local_gpu()}
 
 
+def apple_gpu_usage(total_memory_gb: float) -> dict[str, Any] | None:
+    """Uso da GPU do Apple Silicon lido do IOAccelerator (ioreg não pede sudo). A GPU usa a memória unificada, então
+    "vram" é a memória do sistema alocada para ela. O macOS não expõe a temperatura sem sudo (powermetrics); no lugar
+    dela vai o estado térmico (`pmset -g therm`): "ok" ou "limitada" quando o sistema reduz a velocidade."""
+    try:
+        text = subprocess.run(["ioreg", "-r", "-d", "1", "-w0", "-c", "IOAccelerator"], capture_output=True, text=True,
+                              timeout=5).stdout
+        stats = dict(re.findall(r'"([^"]+)"=(\d+)', re.search(r'"PerformanceStatistics" = \{([^}]*)\}', text).group(1)))
+        thermal = subprocess.run(["pmset", "-g", "therm"], capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError, AttributeError):
+        return None
+    limited = any(int(value) < 100 for value in re.findall(r"(?:CPU_Speed_Limit|GPU_Speed_Limit)\s*=\s*(\d+)", thermal))
+    return {"name": apple_chip_name(), "utilization": float(stats.get("Device Utilization %", 0)), "temperature": None,
+            "thermal": "limitada" if limited else "ok",
+            "vramUsedGb": round(int(stats.get("Alloc system memory", 0)) / 2**30, 1), "vramTotalGb": total_memory_gb}
+
+
 def system_usage() -> dict[str, Any]:
     """Uso de CPU, memória e GPU para os medidores do painel (pedido de 2026-10-06). Leve: roda a cada poucos segundos.
 
-    GPU NVIDIA via nvidia-smi; no Apple Silicon a GPU divide a memória do sistema (sem medidor próprio), então "gpu" vem vazio.
+    GPU NVIDIA via nvidia-smi; Apple Silicon via ioreg (sem sudo).
     """
     import psutil
 
@@ -83,6 +101,9 @@ def system_usage() -> dict[str, Any]:
     usage: dict[str, Any] = {"cpu": psutil.cpu_percent(interval=0.5), "memory": memory.percent,
                              "memoryUsedGb": round(memory.used / 2**30, 1), "memoryTotalGb": round(memory.total / 2**30, 1),
                              "gpu": None}
+    if apple_silicon():
+        usage["gpu"] = apple_gpu_usage(usage["memoryTotalGb"])
+        return usage
     exe = shutil.which("nvidia-smi")
     if not exe:
         return usage

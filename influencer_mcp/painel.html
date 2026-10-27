@@ -516,11 +516,11 @@ async function refreshGauges() {
   try {
     const u = await (await fetch('/api/sistema')).json(), g = u.gpu;
     document.getElementById('gauges').innerHTML = [
-      gauge('GPU', g && g.utilization, '%', g ? `VRAM ${g.vramUsedGb} de ${g.vramTotalGb} GB` : 'sem GPU NVIDIA'),
+      gauge('GPU', g && g.utilization, '%', g ? `${g.thermal ? 'memória unificada' : 'VRAM'} ${g.vramUsedGb} de ${g.vramTotalGb} GB` : 'GPU indisponível'),
       gauge('CPU', u.cpu, '%', 'todos os núcleos'),
       gauge('Memória', u.memory, '%', `${u.memoryUsedGb} de ${u.memoryTotalGb} GB`),
-      gauge('Temperatura da GPU', g && g.temperature, ' °C', g && g.temperature > GPU_HOT ? `acima de ${GPU_HOT} °C` : `alerta acima de ${GPU_HOT} °C`,
-        !!(g && g.temperature > GPU_HOT), GPU_HOT),
+      gauge('Temperatura da GPU', g && g.temperature, ' °C', g && g.thermal ? `estado térmico: ${g.thermal}` : g && g.temperature > GPU_HOT ? `acima de ${GPU_HOT} °C` : `alerta acima de ${GPU_HOT} °C`,
+        !!(g && (g.temperature > GPU_HOT || g.thermal === 'limitada')), GPU_HOT),
     ].join('');
   } catch { /* o aviso de painel sem resposta já aparece no topo */ }
 }
