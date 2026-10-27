@@ -19,6 +19,11 @@ from .winproc import quiet, venv_python
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
+# Alerta de temperatura do chip da Apple: sob carga contínua (Wan) o die passa dos 80 °C sem problema e o sistema
+# só reduz a velocidade perto de 100-105 °C; 85 °C (limite da NVIDIA) alertaria o tempo todo.
+APPLE_HOT_CELSIUS = 95
+
+
 def apple_silicon() -> bool:
     return sys.platform == "darwin" and platform.machine() == "arm64"
 
@@ -96,6 +101,7 @@ def apple_gpu_usage(total_memory_gb: float) -> dict[str, Any] | None:
     limited = any(int(value) < 100 for value in re.findall(r"(?:CPU_Speed_Limit|GPU_Speed_Limit)\s*=\s*(\d+)", thermal))
     return {"name": apple_chip_name(), "utilization": float(stats.get("Device Utilization %", 0)),
             "temperature": chip_temperature(),
+            "hotAt": APPLE_HOT_CELSIUS,
             "thermal": "limitada" if limited else "ok",
             "vramUsedGb": round(int(stats.get("Alloc system memory", 0)) / 2**30, 1), "vramTotalGb": total_memory_gb}
 
