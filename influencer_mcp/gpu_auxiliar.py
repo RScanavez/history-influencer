@@ -1,8 +1,8 @@
 """Segunda GPU (ex.: AMD Radeon 780M integrada ao lado da RTX) fazendo a interpolação RIFE 2x dos clipes.
 
 Só entra em vigor quando há DUAS GPUs: o rife-ncnn-vulkan instalado (RIFE_NCNN_DIR, ou a pasta rife-ncnn-vulkan
-ao lado do ComfyUI; o install.ps1 baixa só em máquinas com duas placas) e, entre as placas Vulkan que ele enxerga,
-uma que não seja NVIDIA (a NVIDIA é a do ComfyUI). Com uma GPU só, na GPU remota, sem o programa ou se o teste de
+ao lado do ComfyUI; instalado só em máquinas com duas placas) e, entre as placas Vulkan que ele enxerga,
+uma que não seja NVIDIA (a NVIDIA é a do ComfyUI). Com uma GPU só, sem o programa ou se o teste de
 abertura falhar, nada muda: o RIFE continua dentro do workflow do ComfyUI. INFLUENCER_RIFE_AUX=0 desliga.
 
 Por que (2026-10-11, ASUS TUF A16): o RIFE saía da RTX a cada clipe; na 780M ele roda em segundo plano (~7 s por
@@ -118,8 +118,8 @@ def _detect() -> Auxiliary | None:
 
 
 def auxiliary() -> Auxiliary | None:
-    """A segunda GPU pronta para o RIFE, ou None (uma GPU só, GPU remota, desligado ou teste falhou)."""
-    if os.environ.get("INFLUENCER_RIFE_AUX") == "0" or os.environ.get("INFLUENCER_GPU") == "remota":
+    """A segunda GPU pronta para o RIFE, ou None (uma GPU só, desligado ou teste falhou)."""
+    if os.environ.get("INFLUENCER_RIFE_AUX") == "0":
         return None
     return _detect()
 

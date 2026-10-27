@@ -110,7 +110,7 @@ class GpuPriorityTests(unittest.TestCase):
 
     def test_non_job_json_in_jobs_folder_is_ignored(self):
         self.write("kf1", "keyframes", queued_at=1)
-        (self.dir / "gpu-remota.json").write_text('{"lastActivity": "x", "tunnelPid": 1}')
+        (self.dir / "estado.json").write_text('{"lastActivity": "x"}')
         self.assertTrue(mj._oldest_queued("kf1"))  # antes: KeyError 'state' derrubava a fila inteira
         self.assertEqual([job["id"] for job in mj._live_jobs()], ["kf1"])
 

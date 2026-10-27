@@ -67,9 +67,6 @@ class DiscardOutputsTests(unittest.TestCase):
         comfyui.discard_outputs("http://127.0.0.1:8188", [{"filename": self.file.name, "subfolder": "sub", "type": "output"}])
         self.assertFalse(self.file.exists())
 
-    def test_remote_gpu_is_left_alone(self):
-        comfyui.discard_outputs("http://127.0.0.1:8189", [{"filename": self.file.name, "subfolder": "sub", "type": "output"}])
-        self.assertTrue(self.file.exists())
 
 
 class GpuProfileTests(unittest.TestCase):

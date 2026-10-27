@@ -40,13 +40,11 @@ class DetectionTests(unittest.TestCase):
         finally:
             gpu_auxiliar._detect.cache_clear()
 
-    def test_remote_gpu_and_switch_off_skip_detection(self):
+    def test_switch_off_skips_detection(self):
         with patch.object(gpu_auxiliar, "_detect", return_value=AUX) as detect:
-            with patch.dict(os.environ, {"INFLUENCER_GPU": "remota"}):
+            with patch.dict(os.environ, {"INFLUENCER_RIFE_AUX": "0"}):
                 self.assertIsNone(gpu_auxiliar.auxiliary())
-            with patch.dict(os.environ, {"INFLUENCER_GPU": "local", "INFLUENCER_RIFE_AUX": "0"}):
-                self.assertIsNone(gpu_auxiliar.auxiliary())
-            with patch.dict(os.environ, {"INFLUENCER_GPU": "local", "INFLUENCER_RIFE_AUX": ""}):
+            with patch.dict(os.environ, {"INFLUENCER_RIFE_AUX": ""}):
                 self.assertIs(gpu_auxiliar.auxiliary(), AUX)
         detect.assert_called_once()
 

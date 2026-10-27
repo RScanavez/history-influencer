@@ -108,17 +108,6 @@ class RejectedVideoTests(unittest.TestCase):
             self.assertEqual(painel.videos([], {}), [])
 
 
-class RemoteEtaTests(unittest.TestCase):
-    def test_remote_queue_uses_h100_clip_time_without_history(self):
-        now = datetime(2026, 10, 4, 16, 30, tzinfo=UTC)
-        local = {"id": "l", "kind": "animation", "state": "running", "params": {"gpu": "local"}, "startedAt": now.isoformat(),
-                 "progress": [f"{now.isoformat()} scene-01: clipe 1/2 em 450s"]}
-        remote = {"id": "r", "kind": "animation", "state": "running", "params": {"gpu": "remota"}, "startedAt": now.isoformat(),
-                  "progress": [f"{now.isoformat()} GPU remota: ComfyUI respondendo."]}
-        with patch.object(painel, "remaining_seconds", side_effect=lambda job, clip: clip):
-            rows = {row["id"]: row for row in painel.queue([local, remote], now)}
-        self.assertEqual(rows["l"]["remainingSeconds"], 450)
-        self.assertEqual(rows["r"]["remainingSeconds"], painel.REMOTE_DEFAULT_CLIP_SECONDS)
 
 
 if __name__ == "__main__":

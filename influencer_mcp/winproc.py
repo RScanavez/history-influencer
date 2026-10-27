@@ -80,3 +80,19 @@ def kill_tree(pid: int) -> None:
             victim.kill()
         except psutil.NoSuchProcess:
             pass
+
+
+_REGULAR_FONTS = (r"C:\Windows\Fonts\arial.ttf", "/System/Library/Fonts/Supplemental/Arial.ttf",
+                  "/System/Library/Fonts/Helvetica.ttc", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+_BOLD_FONTS = (r"C:\Windows\Fonts\ariblk.ttf", "/System/Library/Fonts/Supplemental/Arial Black.ttf",
+               "/System/Library/Fonts/Supplemental/Arial Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
+
+
+def caption_font(bold: bool = False) -> Path:
+    """Fonte das legendas e miniaturas: CAPTION_FONT, senão a primeira fonte do sistema que existir (Arial no
+    Windows e no macOS). Sem nenhuma, devolve o caminho do Arial (quem chama cai na fonte padrão do Pillow)."""
+    configured = os.environ.get("CAPTION_FONT", "").strip()
+    if configured and not bold:
+        return Path(configured)
+    candidates = _BOLD_FONTS if bold else _REGULAR_FONTS
+    return next((Path(item) for item in candidates if Path(item).is_file()), Path(candidates[0]))

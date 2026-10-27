@@ -103,7 +103,6 @@
     <form class="lote" id="loteForm">
       <label>Identidade visual<select name="identity" id="identitySelect"></select></label>
       <label>Personagem<select name="profile" id="profileSelect"></select></label>
-      <label>GPU<select name="gpu" id="gpuSelect"><option value="local">Local (este PC)</option><option value="remota">Remota (RunPod)</option></select></label>
       <label>Formato<select name="format"><option value="short">Short (vertical)</option><option value="video">Vídeo (horizontal)</option></select></label>
       <label>Vídeos<select name="quantity"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label>
       <label>Tema (opcional)<input name="theme" maxlength="200" placeholder="ex.: equilíbrio, exercícios com cadeira"></label>
@@ -114,7 +113,6 @@
   </section>
   <section>
     <h2>Fila da GPU</h2>
-    <div id="remoteGpu"></div>
     <div id="queue"></div>
   </section>
   <section>
@@ -208,44 +206,18 @@ function render(data) {
     idSel.dataset.ids = identityIds;
   }
   fillProfiles();
-  // Verificação do ambiente (feita na abertura do painel): sem GPU local, a fila local fica indisponível;
-  // a remota fica disponível, com a lista do que falta e de como resolver.
+  // Verificação do ambiente (feita na abertura do painel): sem GPU utilizável, a fila fica indisponível.
   const env = data.environment || {};
   const localGpu = env.local || { available: true, gpus: [], problems: [] };
-  const remoteEnv = env.remote || { ready: !!(data.remoteGpu && data.remoteGpu.configured), items: [] };
-  const localOption = document.querySelector('#gpuSelect option[value="local"]');
-  const remoteOption = document.querySelector('#gpuSelect option[value="remota"]');
-  if (localOption) {
-    localOption.disabled = !localGpu.available;
-    localOption.textContent = localGpu.available ? 'Local (este PC)' : 'Local — sem GPU neste computador';
-  }
-  // A remota fica sempre selecionável (decisão do usuário, 2026-10-04); se faltar algo, o lote é recusado
-  // com a explicação e a caixa "Verificação do ambiente" mostra o que fazer.
-  if (remoteOption) {
-    remoteOption.disabled = false;
-    remoteOption.textContent = remoteEnv.ready ? 'Remota (RunPod)' : 'Remota (RunPod) — falta configurar';
-  }
-  const gpuSelect = document.getElementById('gpuSelect');
-  if (gpuSelect && !localGpu.available && gpuSelect.value === 'local') gpuSelect.value = 'remota';
-  const pending = (remoteEnv.items || []).filter(i => !i.ok);
-  document.getElementById('envCheck').innerHTML = localGpu.available ? `<p class="small" style="opacity:.6;margin:0 0 12px">GPU remota (pay as you go) desabilitada por código.</p>` : `
+  document.getElementById('envCheck').innerHTML = localGpu.available ? '' : `
     <div class="card" style="margin-bottom:12px">
       <h3>Verificação do ambiente</h3>
-      <p><span class="chip ${localGpu.available ? 'ok' : 'warn'}">GPU local: ${localGpu.available ? esc(localGpu.gpus.join(', ')) : 'indisponível'}</span>
-        ${localGpu.available ? '' : `<span class="small">${esc(localGpu.problems.join(' '))} A fila local fica desativada; use a GPU remota.</span>`}</p>
-      <p class="small" style="opacity:.6">GPU remota (pay as you go) desabilitada por código.</p>
+      <p><span class="chip warn">GPU: indisponível</span> <span class="small">${esc(localGpu.problems.join(' '))}</span></p>
       <button class="btn" id="recheckEnv">Verificar de novo</button>
     </div>`;
-  const rg = data.remoteGpu || {};
-  document.getElementById('remoteGpu').innerHTML = !rg.configured ? '' : rg.error
-    ? `<p><span class="chip bad">GPU remota</span> <span class="small">${esc(rg.error)}</span></p>`
-    : `<p class="row"><span class="chip ${rg.running ? (rg.idleMinutes >= 10 ? 'warn' : 'run') : ''}">GPU remota (H100): ${rg.running ? 'ligada' : 'desligada'}</span>
-        ${rg.running ? `<span class="small">US$ ${esc(rg.costPerHr)}/h${rg.idleMinutes != null ? ` · sem uso há ${rg.idleMinutes} min` : ''}${rg.idleMinutes >= 10 ? ' — está cobrando sem trabalho' : ''}</span>
-        <button class="btn danger" id="stopRemote">Desligar GPU remota</button>` : '<span class="small">liga sozinha quando entrar um vídeo remoto</span>'}</p>`;
   const q = data.queue;
-  // Uma tabela por GPU: cada uma tem fila própria e as duas rodam ao mesmo tempo.
-  const waitingGpu = j => /aguardando H100/.test(j.lastProgress || '');
-  const stateChip = j => j.paused ? ['warn', 'pausado'] : waitingGpu(j) ? ['warn', 'aguardando H100 livre']
+  const waitingGpu = j => /aguardando a GPU/.test(j.lastProgress || '');
+  const stateChip = j => j.paused ? ['warn', 'pausado'] : waitingGpu(j) ? ['warn', 'aguardando GPU livre']
     : j.state === 'running' ? ['run', 'rodando'] : ['', 'na fila'];
   const table = rows => `<table>
     <tr><th>#</th><th>Vídeo</th><th>Etapa</th><th>Último progresso</th><th>Término previsto</th><th>Falta</th><th></th></tr>
@@ -261,11 +233,7 @@ function render(data) {
         <button class="btn" data-job="${esc(j.id)}" data-jobact="${j.paused ? 'retomar_job' : 'pausar_job'}">${j.paused ? 'Retomar' : 'Pausar'}</button>
         <button class="btn danger" data-job="${esc(j.id)}" data-jobact="cancelar_job" data-slug="${esc(j.slug)}">Cancelar</button></div></td>
     </tr>`; }).join('')}</table>`;
-  const local = q.filter(j => j.gpu !== 'remota'), remote = q.filter(j => j.gpu === 'remota');
-  document.getElementById('queue').innerHTML = !q.length ? '<p class="empty">Nenhum job rodando ou na fila.</p>'
-    : `<h3>GPU local (este PC)</h3>${local.length ? table(local) : '<p class="empty">Nada na fila local.</p>'}`
-      + (remote.length || (data.remoteGpu && data.remoteGpu.configured)
-        ? `<h3>GPU remota (H100, RunPod)</h3>${remote.length ? table(remote) : '<p class="empty">Nada na fila remota.</p>'}` : '');
+  document.getElementById('queue').innerHTML = !q.length ? '<p class="empty">Nenhum job rodando ou na fila.</p>' : table(q);
 
   const stages = ['Todos', ...new Set(data.videos.map(v => v.stage))];
   document.getElementById('filters').innerHTML = stages.map(s =>
@@ -476,7 +444,7 @@ document.getElementById('loteForm').addEventListener('submit', async e => {
   const who = document.getElementById('profileSelect').selectedOptions[0]?.textContent.replace(' (padrão)', '') || f.profile;
   const look = document.getElementById('identitySelect').selectedOptions[0]?.textContent.replace(' (atual)', '') || f.identity;
   if (!confirm(`Iniciar lote de ${f.quantity} ${f.format === 'video' ? 'vídeo(s) HORIZONTAL(IS)' : 'Short(s)'} com ${who} (${look})${f.theme ? ` sobre "${f.theme}"` : ''}?`)) return;
-  try { const r = await post('/api/lote', { quantity: Number(f.quantity), theme: f.theme, format: f.format, profile: f.profile, identity: f.identity, gpu: f.gpu }); toast(r.message); e.target.reset(); refresh(); }
+  try { const r = await post('/api/lote', { quantity: Number(f.quantity), theme: f.theme, format: f.format, profile: f.profile, identity: f.identity }); toast(r.message); e.target.reset(); refresh(); }
   catch (err) { toast('Não foi possível: ' + err.message, 7000); }
 });
 document.getElementById('envCheck').addEventListener('click', async e => {
@@ -486,16 +454,10 @@ document.getElementById('envCheck').addEventListener('click', async e => {
 });
 document.getElementById('status').addEventListener('click', async e => {
   if (e.target.id !== 'stopComfy') return;
-  if (!confirm('Desligar o ComfyUI agora? Libera a GPU e a memória; ele liga sozinho quando entrar um vídeo local.')) return;
+  if (!confirm('Desligar o ComfyUI agora? Libera a GPU e a memória; ele liga sozinho quando entrar um vídeo.')) return;
   e.target.disabled = true;
   try { const r = await post('/api/acao', { action: 'desligar_comfyui' }); toast(r.message, 7000); refresh(); }
   catch (err) { toast('Não foi possível: ' + err.message, 7000); e.target.disabled = false; }
-});
-document.getElementById('remoteGpu').addEventListener('click', async e => {
-  if (e.target.id !== 'stopRemote') return;
-  if (!confirm('Desligar a GPU remota agora? Ela para de cobrar por hora (o disco continua salvo) e liga sozinha quando entrar um vídeo remoto.')) return;
-  try { const r = await post('/api/acao', { action: 'desligar_gpu_remota' }); toast(r.message, 7000); refresh(); }
-  catch (err) { toast('Não foi possível: ' + err.message, 7000); }
 });
 document.getElementById('queue').addEventListener('click', async e => {
   const b = e.target.closest('button[data-jobact]');

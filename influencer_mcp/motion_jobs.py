@@ -24,51 +24,6 @@ JOBS_DIR = GENERATED_ROOT / "jobs"
 # (2026-10-15: Influencer e Historiador); sem a variável, cada projeto usa a sua.
 LOCK_PATH = Path(os.environ["INFLUENCER_GPU_LOCK"]) if os.environ.get("INFLUENCER_GPU_LOCK") else JOBS_DIR / "gpu.lock"
 KINDS = ("keyframes", "animation")
-# GPU de cada job (pedido do usuário, 2026-10-03): "local" (este PC) ou "remota" (RunPod). Cada uma tem fila e trava
-# próprias e as duas rodam ao mesmo tempo. Vídeos sem a marcação (todos os anteriores) ficam na local.
-TARGETS = ("local", "remota")
-_TARGET = "local"  # GPU do job deste processo (um processo = um job)
-
-
-def job_target(job: dict[str, Any]) -> str:
-    params = job.get("params", {})
-    return params.get("gpu") if params.get("gpu") in TARGETS else "local"
-
-
-def resolve_target(params: dict[str, Any]) -> str:
-    """GPU de um job novo: a pedida, senão a do roteiro/vídeo, senão a escolhida no lote; padrão local."""
-    if params.get("gpu") in TARGETS:
-        return params["gpu"]
-    script = params.get("script") or {}
-    if script.get("gpu") in TARGETS:
-        return script["gpu"]
-    batch = params.get("batch_id")
-    slug = params.get("video_slug") or script.get("slug")
-    if batch and slug:
-        for path in GENERATED_ROOT.glob(f"*/{batch}/{slug}/motion-script.json"):
-            try:
-                saved = json.loads(path.read_text(encoding="utf-8")).get("gpu")
-            except (OSError, json.JSONDecodeError):
-                continue
-            if saved in TARGETS:
-                return saved
-    lotes = GENERATED_ROOT / "lotes"
-    if batch and lotes.is_dir():
-        for path in lotes.glob("*.json"):
-            try:
-                record = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                continue
-            if record.get("batchId") == batch and record.get("gpu") in TARGETS:
-                return record["gpu"]
-    # Sem escolha registrada: a local, se este computador tiver GPU; senão a remota (app instalado em outra máquina).
-    from .ambiente import default_target
-
-    return default_target()
-
-
-def _lock_path() -> Path:
-    return LOCK_PATH if _TARGET == "local" else LOCK_PATH.with_name("gpu-remota.lock")
 
 
 def _now() -> str:
@@ -189,7 +144,6 @@ def start_job(kind: str, params: dict[str, Any], *, spawn: bool = True) -> dict[
     JOBS_DIR.mkdir(parents=True, exist_ok=True)
     job_id = uuid.uuid4().hex[:12]
     path = _job_path(job_id)
-    params = {**params, "gpu": resolve_target(params)}
     job = {
         "id": job_id, "kind": kind, "params": params, "state": "queued",
         "createdAt": _now(), "queuedAtNs": _next_queue_position(), "progress": [], "result": None, "error": None,
@@ -317,9 +271,9 @@ def _live_jobs() -> list[dict[str, Any]]:
             job = _read(path)
         except (OSError, json.JSONDecodeError):
             continue
-        if job["state"] in ("queued", "running") and _job_alive(job) and job_target(job) == _TARGET:
+        if job["state"] in ("queued", "running") and _job_alive(job):
             jobs.append(job)
-    return jobs  # só os da mesma GPU: fila, prioridade e pausas valem por GPU
+    return jobs
 
 
 def _active_languages() -> list[str]:
@@ -374,7 +328,7 @@ def _paused_animation(exclude: str) -> bool:
 
 
 def _try_lock() -> bool:
-    lock = _lock_path()
+    lock = LOCK_PATH
     holder = int(lock.read_text() or 0) if lock.is_file() else 0
     if holder and _pid_alive(holder):
         return False
@@ -383,7 +337,7 @@ def _try_lock() -> bool:
 
 
 def _release_lock() -> None:
-    lock = _lock_path()
+    lock = LOCK_PATH
     if lock.is_file() and lock.read_text().strip() == str(os.getpid()):
         lock.unlink(missing_ok=True)
 
@@ -399,10 +353,6 @@ def _acquire_gpu(job_id: str, kind: str = "animation", urgent: bool = False) -> 
 
 def _checkpoint(path: Path, job: dict[str, Any], progress: Any) -> None:
     """Ponto seguro entre clipes/imagens: atende a pausa do usuário e, nas animações, a prioridade das imagens-chave."""
-    if _TARGET == "remota":
-        from .gpu_remota import touch
-
-        touch()  # a máquina remota só desliga depois de ficar ociosa
     if is_paused(job["id"]):
         # Volta para a fila com a posição original: os outros seguem; ao retomar, espera a vez normalmente.
         job["state"] = "queued"
@@ -435,7 +385,7 @@ def _pause_for_keyframes(path: Path, job: dict[str, Any], progress: Any) -> None
 
 def _gpu_free_now(job_id: str) -> bool:
     """A GPU está livre e este job é o próximo: narrar na CPU só atrasaria o começo."""
-    lock = _lock_path()
+    lock = LOCK_PATH
     holder = int(lock.read_text() or 0) if lock.is_file() else 0
     return not (holder and _pid_alive(holder)) and _oldest_queued(job_id)
 
@@ -482,17 +432,10 @@ def _keep_awake() -> None:
 def run_job(path: Path) -> None:
     from . import motion  # importado aqui para o processo de fila não depender do ComfyUI ao ser criado
 
-    global _TARGET
     _keep_awake()
     job = _read(path)
     job["pid"], job["pidAt"] = os.getpid(), _now()
     _write(path, job)
-    _TARGET = job_target(job)
-    os.environ["INFLUENCER_GPU"] = _TARGET
-    if _TARGET == "remota":
-        from .gpu_remota import base_url
-
-        os.environ["COMFYUI_URL"] = base_url()  # túnel SSH para o ComfyUI da máquina remota
 
     def progress(message: str) -> None:
         job["progress"].append(f"{_now()} {message}")
@@ -538,7 +481,7 @@ def run_job(path: Path) -> None:
         if job["kind"] == "keyframes" and params.get("thenAnimate"):
             # Cenas refeitas num vídeo pronto: anima só elas e remonta o vídeo (idiomas ativos com as traduções salvas).
             follow = start_job("animation", {"influencer_name": params["influencer_name"], "batch_id": params["batch_id"],
-                                             "video_slug": params["script"]["slug"], "gpu": job_target(job),
+                                             "video_slug": params["script"]["slug"],
                                              "scene_numbers": params.get("scene_numbers"),
                                              "urgent": bool(params.get("urgent"))})
             progress(f"imagens prontas; animação das cenas e remontagem na fila ({follow['id']})")

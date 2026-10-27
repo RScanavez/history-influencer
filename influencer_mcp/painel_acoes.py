@@ -588,36 +588,6 @@ def retomar_job(job_id: str) -> dict[str, Any]:
     return {"message": "Job retomado: continua de onde parou quando a GPU estiver livre."}
 
 
-def mover_gpu(job_id: str, gpu: str) -> dict[str, Any]:
-    """Passa um job que ainda espera na fila para a outra GPU (local/remota), sem perder nada do vídeo
-    (pedido de 2026-10-06). Job rodando não muda: a animação continua de onde parou se for movida depois."""
-    from .motion_jobs import TARGETS, job_target, pause_path
-
-    if gpu not in TARGETS:
-        raise ValueError("GPU inválida (local ou remota).")
-    path, job = _job_file(job_id)
-    if job.get("state") != "queued":
-        raise RuntimeError("Só dá para mover um job que ainda espera na fila (o que já está na GPU termina nela).")
-    if job_target(job) == gpu:
-        return {"jobId": job_id, "message": f"O job já está na GPU {gpu}."}
-    params = {**job.get("params", {}), "gpu": gpu}
-    batch, slug = params.get("batch_id"), params.get("video_slug") or params.get("script", {}).get("slug")
-    if job["kind"] == "keyframes":
-        params["script"] = {**params["script"], "gpu": gpu}
-    folder = GENERATED_ROOT / _slug(INFLUENCER) / batch / slug
-    script_path = folder / "motion-script.json"
-    if script_path.is_file():  # refazer cenas e animar seguem na mesma GPU do vídeo
-        script = json.loads(script_path.read_text(encoding="utf-8"))
-        script["gpu"] = gpu
-        script_path.write_text(json.dumps(script, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    _stop_jobs(batch, slug)
-    pause_path(job_id).unlink(missing_ok=True)
-    new = start_job(job["kind"], params)
-    if folder.is_dir():
-        write_state(folder, read_state(folder).get("stage"), f"job movido para a GPU {gpu}", "mover_gpu")
-    return {"jobId": new["id"], "message": f"Job movido para a fila da GPU {gpu}."}
-
-
 def cancelar_job(job_id: str) -> dict[str, Any]:
     """Encerra o job e apaga o vídeo dele por completo (pasta, jobs e cópias em output/)."""
     from .motion_jobs import pause_path
@@ -638,38 +608,25 @@ def cancelar_job(job_id: str) -> dict[str, Any]:
     return {"message": f"Job cancelado e vídeo {slug} excluído com todos os arquivos."}
 
 
-def desligar_gpu_remota() -> dict[str, Any]:
-    """Só o usuário desliga a máquina remota (decisão de 2026-10-03)."""
-    from .gpu_remota import configured, shutdown
-    from .motion_jobs import job_target, list_jobs
-
-    if not configured():
-        raise RuntimeError("GPU remota não configurada.")
-    if any(job["state"] in ("queued", "running") and job_target(job) == "remota" for job in list_jobs()):
-        raise RuntimeError("Há jobs na GPU remota; pause ou cancele antes de desligar.")
-    shutdown()
-    return {"message": "GPU remota desligada. Ela liga de novo sozinha quando entrar um vídeo remoto."}
 
 
 def desligar_comfyui() -> dict[str, Any]:
     """Desliga o ComfyUI local para liberar GPU e memória; os jobs o iniciam de novo sozinhos."""
     from . import comfyui
-    from .motion_jobs import job_target, list_jobs
+    from .motion_jobs import list_jobs
 
-    if any(job["state"] in ("queued", "running") and job_target(job) == "local" for job in list_jobs()):
-        raise RuntimeError("Há jobs na GPU local; pause ou cancele antes de desligar o ComfyUI.")
+    if any(job["state"] in ("queued", "running") for job in list_jobs()):
+        raise RuntimeError("Há jobs na GPU; pause ou cancele antes de desligar o ComfyUI.")
     if not comfyui.stop():
         return {"message": "O ComfyUI já estava desligado."}
-    return {"message": "ComfyUI desligado. Ele liga de novo sozinho quando entrar um vídeo local."}
+    return {"message": "ComfyUI desligado. Ele liga de novo sozinho quando entrar um vídeo."}
 
 
 ACTIONS = {
     "desligar_comfyui": lambda body: desligar_comfyui(),
-    "desligar_gpu_remota": lambda body: desligar_gpu_remota(),
     "pausar_job": lambda body: pausar_job(body.get("job", "")),
     "retomar_job": lambda body: retomar_job(body.get("job", "")),
     "cancelar_job": lambda body: cancelar_job(body.get("job", "")),
-    "mover_gpu": lambda body: mover_gpu(body.get("job", ""), body.get("gpu", "")),
     "arquivar_publicados": lambda body: arquivar_publicados(),
     "limpar_idiomas_desligados": lambda body: limpar_idiomas_desligados(),
     "refazer_capa": lambda body: refazer_capa(body["batch"], body["slug"]),
@@ -828,7 +785,7 @@ def _batch_has_video(batch: str) -> bool:
 
 
 def iniciar_lote(quantity: int, theme: str, fmt: str = "short", profile: str | None = None,
-                 gpu: str = "local", identity: str | None = None) -> dict[str, Any]:
+                 identity: str | None = None) -> dict[str, Any]:
     """Dispara /gerar-lote no Claude Code sem janela (uma sessão: temas, roteiros e SEO); o vídeo para na revisão."""
     from .perfis import AUTO, DEFAULT_IDENTITY, active_name, balanced_plan, get, identities, selectable
 
@@ -851,20 +808,11 @@ def iniciar_lote(quantity: int, theme: str, fmt: str = "short", profile: str | N
     plan = balanced_plan(int(quantity), identity=identity) if profile == AUTO else [profile] * int(quantity)
     profile = plan[0]
     character = characters[profile]
-    if gpu not in ("local", "remota"):
-        raise ValueError("GPU inválida (local ou remota).")
-    from .ambiente import local_gpu, remote_checks, remote_ready
+    from .ambiente import local_gpu
 
-    if gpu == "local":
-        local = local_gpu()
-        if not local["available"]:
-            raise RuntimeError("Este computador não tem GPU local utilizável: " + " ".join(local["problems"])
-                               + " Use a GPU remota.")
-    else:
-        items = remote_checks(check_api=False)
-        if not remote_ready(items):
-            missing = [f"{item['label']}: {item['help']}" for item in items if not item["ok"] and item["id"] != "saldo"]
-            raise RuntimeError("A GPU remota ainda não está pronta. Falta: " + " | ".join(missing))
+    local = local_gpu()
+    if not local["available"]:
+        raise RuntimeError("Este computador não tem GPU utilizável: " + " ".join(local["problems"]))
     quantity = int(quantity)
     if not 1 <= quantity <= 5:
         raise ValueError("Quantidade entre 1 e 5 vídeos.")
@@ -886,7 +834,7 @@ def iniciar_lote(quantity: int, theme: str, fmt: str = "short", profile: str | N
     process = _spawn_lote(prompt, batch_id, plan, characters, LOTES_DIR / f"{lote_id}.log")
     record = {"id": lote_id, "pid": process.pid, "quantity": quantity, "theme": theme, "prompt": prompt, "format": fmt,
               "batchId": batch_id, "profile": profile, "character": character["label"], "identity": identity,
-              "identityLabel": labels[identity], "gpu": gpu, "startedAt": _now()}
+              "identityLabel": labels[identity], "startedAt": _now()}
     (LOTES_DIR / f"{lote_id}.json").write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return {"id": lote_id, "message": f"Lote iniciado ({labels[identity]} · {character['label']}): {prompt}"}
 

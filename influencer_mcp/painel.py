@@ -22,7 +22,7 @@ from typing import Any
 from .ambiente import system_usage
 from .localize import enabled_languages
 from .media import GENERATED_ROOT, PROJECT_ROOT
-from .motion_jobs import JOBS_DIR, _job_alive, is_paused, job_target
+from .motion_jobs import JOBS_DIR, _job_alive, is_paused
 from .youtube_publish import Publisher, read_publication
 from . import youtube_publish
 from .painel_acoes import (iniciar_lote, language_build_running, list_lotes, read_state, remount_running, run_action,
@@ -72,10 +72,6 @@ def load_jobs() -> list[dict[str, Any]]:
             job["state"] = "failed"
         jobs.append(job)
     return sorted(jobs, key=lambda job: job.get("queuedAtNs", 0))
-
-
-# Clipe medido na H100 remota (2026-10-03, ~115 s de GPU + download em paralelo): usado até haver histórico remoto.
-REMOTE_DEFAULT_CLIP_SECONDS = 130
 
 
 def clip_seconds(jobs: list[dict[str, Any]], recent: int = 60, default: float | None = None) -> float:
@@ -144,27 +140,17 @@ def remaining_seconds(job: dict[str, Any], clip: float) -> float:
 def queue(jobs: list[dict[str, Any]], now: datetime) -> list[dict[str, Any]]:
     """Jobs ativos em ordem de execução, com início e término previstos.
 
-    Cada GPU (local e remota) roda um job por vez, em fila própria; as previsões são calculadas por GPU.
+    A GPU roda um job por vez; as previsões seguem a ordem da fila.
     """
     active = [job for job in jobs if job["state"] in ("running", "queued")]
-    active.sort(key=lambda job: (job_target(job) != "local", job["state"] != "running", job["kind"] != "keyframes",
-                                 job.get("queuedAtNs", 0)))
-    cursors, clips, rows = {}, {}, []
+    active.sort(key=lambda job: (job["state"] != "running", job["kind"] != "keyframes", job.get("queuedAtNs", 0)))
+    cursor, clip, rows = now, clip_seconds(jobs), []
     for job in active:
-        target = job_target(job)
-        if target not in clips:
-            same = [other for other in jobs if job_target(other) == target]
-            # Cada GPU com o seu histórico; a remota, sem clipes medidos ainda, usa o tempo medido na H100
-            # (antes caía no padrão da GPU local e mostrava ~3x o tempo real; 2026-10-04).
-            clips[target] = clip_seconds(same, default=REMOTE_DEFAULT_CLIP_SECONDS if target == "remota" else None)
-        clip = clips[target]
-        cursor = cursors.get(target, now)
         remaining = remaining_seconds(job, clip)
         start = cursor if job["state"] == "queued" else _parse_time(job.get("startedAt")) or now
         finish = cursor + timedelta(seconds=remaining)
-        cursors[target] = finish
+        cursor = finish
         rows.append({
-            "gpu": target,
             "id": job["id"], "kind": job["kind"], "state": job["state"], "paused": is_paused(job["id"]), "slug": _job_slug(job),
             "batch": job["params"].get("batch_id"), "startedAt": job.get("startedAt"),
             "expectedStart": start.isoformat(), "expectedFinish": finish.isoformat(),
@@ -337,24 +323,6 @@ def publish_slots(text: str | None = None) -> dict[str, Any]:
             "delayMinutes": values.get("agendar-apos-min"), "commentSince": values.get("comentario-automatico-desde")}
 
 
-_REMOTE_CACHE: dict[str, Any] = {"at": 0.0, "value": {"configured": False}}
-
-
-def _remote_gpu() -> dict[str, Any]:
-    """Situação da GPU remota (consulta a API do RunPod no máximo a cada 60 s)."""
-    from . import gpu_remota
-
-    if not gpu_remota.configured():
-        return {"configured": False}
-    if time.monotonic() - _REMOTE_CACHE["at"] > 60:
-        try:
-            _REMOTE_CACHE["value"] = gpu_remota.status()
-        except Exception as error:  # noqa: BLE001 - sem internet/API: mostra o erro, o painel segue
-            _REMOTE_CACHE["value"] = {"configured": True, "error": str(error)[:200]}
-        _REMOTE_CACHE["at"] = time.monotonic()
-    return _REMOTE_CACHE["value"]
-
-
 def _characters() -> list[dict[str, str]]:
     from .perfis import selectable
 
@@ -403,7 +371,6 @@ def state(now: datetime | None = None) -> dict[str, Any]:
         "queue": rows, "queueFinish": rows[-1]["expectedFinish"] if rows else None,
         "characters": _characters(),
         "identities": _identities(),
-        "remoteGpu": _remote_gpu(),
         "activeLanguages": ["pt", *enabled_languages()],
         "environment": ENVIRONMENT,
         "videos": videos(jobs, finish_by_slug), "failures": recent_failures, "publishing": publishing(now),
@@ -591,7 +558,7 @@ class Handler(BaseHTTPRequestHandler):
                 result = check_environment()
             elif path == "/api/lote":
                 result = iniciar_lote(body.get("quantity", 1), body.get("theme", ""), body.get("format", "short"),
-                                      body.get("profile"), body.get("gpu", "local"), body.get("identity"))
+                                      body.get("profile"), body.get("identity"))
             else:
                 self._json(404, {"error": "Rota desconhecida."})
                 return
@@ -640,12 +607,6 @@ def _guard_jobs(interval: int = 60) -> None:
             if retomados:
                 print("lotes retomados após limite de uso:", ", ".join(retomados), flush=True)
             deleted = limpar_rejeitados()
-            from . import gpu_remota
-            from .motion_jobs import list_jobs
-
-            remote_active = any(job["state"] in ("queued", "running") and job_target(job) == "remota" for job in list_jobs())
-            if gpu_remota.stop_if_idle(remote_active):
-                print("GPU remota desligada por ociosidade", flush=True)
             if deleted:
                 print("rejeitados excluídos:", ", ".join(deleted), flush=True)
             revived = revive_dead_jobs()
@@ -660,7 +621,7 @@ ENVIRONMENT: dict[str, Any] = {}
 
 
 def check_environment() -> dict[str, Any]:
-    """Verificação do ambiente na abertura do painel (GPU local e requisitos da GPU remota)."""
+    """Verificação do ambiente na abertura do painel (GPU e ComfyUI)."""
     from .ambiente import check_all
 
     ENVIRONMENT.clear()
@@ -668,8 +629,6 @@ def check_environment() -> dict[str, Any]:
     local = ENVIRONMENT["local"]
     print("GPU local:", ", ".join(local["gpus"]) if local["available"] else "indisponível — " + " ".join(local["problems"]),
           flush=True)
-    pending = [item["label"] for item in ENVIRONMENT["remote"]["items"] if not item["ok"]]
-    print("GPU remota:", "pronta" if ENVIRONMENT["remote"]["ready"] else "pendente: " + "; ".join(pending), flush=True)
     return ENVIRONMENT
 
 

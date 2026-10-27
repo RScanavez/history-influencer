@@ -21,6 +21,7 @@ from typing import Any, Callable
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from .formats import FORMATS, of_script, normalize as normalize_format
+from .winproc import caption_font
 from .illustration import POSES, render_openpose_guide
 from .thumbnails import compose_thumbnail
 from . import movimentos
@@ -599,15 +600,7 @@ def generate_exercise_keyframes(
 
 
 def fun_control_models() -> tuple[str, str, dict[str, Any]] | None:
-    """Wan 2.2 Fun Control na GPU usada (local: GGUF Q4 na pasta do ComfyUI; remota: fun-alto/fun-baixo em
-    gpu_remota.md). None: a máquina não tem o modelo e as cenas de exercício usam quadro inicial e final."""
-    if os.environ.get("INFLUENCER_GPU") == "remota":
-        from .gpu_remota import settings as remote_settings
-
-        remote = remote_settings()
-        if remote["fun_high"] and remote["fun_low"]:
-            return remote["fun_high"], remote["fun_low"], {"class_type": "UNETLoader", "inputs": {"weight_dtype": "default"}}
-        return None
+    """Wan 2.2 Fun Control (GGUF Q4 na pasta do ComfyUI). None: a máquina não tem o modelo e as cenas de exercício usam quadro inicial e final."""
     from .comfyui import comfyui_dir
 
     high = os.environ.get("WAN_FUN_HIGH_MODEL", "Wan2.2-Fun-A14B-Control_HighNoise-Q4_K_M.gguf")
@@ -646,14 +639,6 @@ def wan_i2v_workflow(
     high = os.environ.get("WAN_HIGH_NOISE_MODEL", "Wan2.2-I2V-A14B-HighNoise-Q4_K_M.gguf")
     low = os.environ.get("WAN_LOW_NOISE_MODEL", "Wan2.2-I2V-A14B-LowNoise-Q4_K_M.gguf")
     loader = {"class_type": "UnetLoaderGGUF", "inputs": {}}
-    if os.environ.get("INFLUENCER_GPU") == "remota":
-        # H100 (decisão do usuário, 2026-10-03): Wan 2.2 completo em FP8, no carregador padrão do ComfyUI.
-        # A GPU local (8 GB) continua com a versão compacta GGUF Q4.
-        from .gpu_remota import settings as remote_settings
-
-        remote = remote_settings()
-        high, low = remote["wan_high"], remote["wan_low"]
-        loader = {"class_type": "UNETLoader", "inputs": {"weight_dtype": "default"}}
     high_lora = os.environ.get("WAN_HIGH_NOISE_LORA", "wan2.2_i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors")
     low_lora = os.environ.get("WAN_LOW_NOISE_LORA", "wan2.2_i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1022.safetensors")
     settings = perfis.get(profile)
@@ -857,7 +842,7 @@ def _finish_clip(base: str, clip_dir: Path, wanted: list[tuple[str, dict[str, An
     Com `interpolation` (segunda GPU), baixa os quadros só ampliados numa subpasta e o RIFE 2x grava os HD."""
     folder = clip_dir / "ampliados" if interpolation else clip_dir
     folder.mkdir(parents=True, exist_ok=True)
-    # Download em paralelo: na GPU remota, baixar ~130 quadros um a um era quase 1/3 do tempo do clipe.
+    # Download em paralelo: baixar ~130 quadros um a um era quase 1/3 do tempo do clipe.
     with ThreadPoolExecutor(max_workers=DOWNLOAD_WORKERS) as pool:
         list(pool.map(lambda pair: (folder / pair[0]).write_bytes(_download(base, pair[1])), wanted))
     discard_outputs(base, images)
@@ -1011,7 +996,7 @@ def caption_overlay(caption: str, avatar_path: Path | None, destination: Path, f
     overlay = Image.new("RGBA", (FRAME_WIDTH, FRAME_HEIGHT), (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
     if caption.strip():
-        font_path = Path(os.environ.get("CAPTION_FONT", r"C:\Windows\Fonts\arial.ttf"))
+        font_path = caption_font()
         font = ImageFont.truetype(str(font_path), 64) if font_path.is_file() else ImageFont.load_default()
         lines = _wrap_text(draw, caption, font, FRAME_WIDTH - 200)[:3]
         line_height = 84
@@ -1333,10 +1318,6 @@ def prepare_motion_keyframes(
         script = {**script, "cornerAvatar": True}  # vídeo antigo que manteve o avatar no canto
     profile = _script_profile(previous_script, script, batch_id)
     script = {**script, "visualProfile": profile}
-    # GPU com que o vídeo nasceu (local/remota): refazer cenas e animar seguem nela. Vídeos antigos: local.
-    gpu = previous_script.get("gpu") if previous_script else os.environ.get("INFLUENCER_GPU")
-    if gpu and "gpu" not in script:
-        script = {**script, "gpu": gpu}
     if previous_script.get("outfit") and not script.get("outfit"):
         script = {**script, "outfit": previous_script["outfit"]}  # refazer cenas mantém a roupa do vídeo
     if not previous_script:
@@ -1536,7 +1517,7 @@ def review_sheet(output_dir: Path, script: dict[str, Any], samples: int = 6) -> 
     rows = len(script["scenes"])
     sheet = Image.new("RGB", (samples * thumb_width, rows * (thumb_height + label_height)), "white")
     draw = ImageDraw.Draw(sheet)
-    font_path = Path(os.environ.get("CAPTION_FONT", r"C:\Windows\Fonts\arial.ttf"))
+    font_path = caption_font()
     font = ImageFont.truetype(str(font_path), 20) if font_path.is_file() else ImageFont.load_default()
     for row, scene in enumerate(script["scenes"]):
         scene_dir = output_dir / f"scene-{row + 1:02d}"
@@ -1675,7 +1656,7 @@ def animate_motion_short(
             for download in downloads:
                 download.result()  # quadros todos no disco: a GPU não é mais necessária
             if gpu_done:
-                gpu_done()  # montagem e FR/EN são CPU: a GPU (local ou remota paga por hora) já fica para o próximo
+                gpu_done()  # montagem e FR/EN são CPU: a GPU já fica para o próximo
             for composition in compositions:
                 composition.result()
         except BaseException:

@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from .illustration import POSES, render_openpose_guide
 from .pose_validation import validate_pose_image
-from .winproc import quiet, tools_dir, venv_python
+from .winproc import caption_font, quiet, tools_dir, venv_python
 
 PROJECT_ROOT = Path(os.environ.get("CLAUDE_PROJECT_DIR", Path.cwd())).resolve()
 GENERATED_ROOT = PROJECT_ROOT / "generated"
@@ -549,7 +549,7 @@ def _captioned_image(source: Path, destination: Path, caption: str, avatar_path:
     image = canvas
     overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
-    font_path = Path(os.environ.get("CAPTION_FONT", r"C:\Windows\Fonts\arial.ttf"))
+    font_path = caption_font()
     if font_path.is_file():
         font = ImageFont.truetype(str(font_path), 52)
     else:
@@ -607,7 +607,7 @@ def _contact_sheet(
     width = gap + columns * (thumb_width + gap)
     sheet = Image.new("RGB", (width, header + rows * row_height), "white")
     draw = ImageDraw.Draw(sheet)
-    font_path = Path(os.environ.get("CAPTION_FONT", r"C:\Windows\Fonts\arial.ttf"))
+    font_path = caption_font()
     if font_path.is_file():
         title_font = ImageFont.truetype(str(font_path), 40)
         text_font = ImageFont.truetype(str(font_path), 22)

@@ -1,7 +1,7 @@
 """Garante o ComfyUI no ar em segundo plano, independente do terminal ou da sessão que o disparou.
 
-Se já estiver respondendo, não faz nada. Pasta do ComfyUI: variável COMFYUI_DIR (definida pelo install.ps1),
-padrão D:\Influencer\tools\ComfyUI. Os jobs de vídeo fazem esta mesma verificação sozinhos antes de usar a GPU.
+Se já estiver respondendo, não faz nada. Pasta do ComfyUI: variável COMFYUI_DIR (definida pelo install.sh),
+padrão ~/Influencer/tools/ComfyUI. Os jobs de vídeo fazem esta mesma verificação sozinhos antes de usar a GPU.
 """
 import os
 import sys

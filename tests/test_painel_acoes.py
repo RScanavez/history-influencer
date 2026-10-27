@@ -386,31 +386,6 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class MoveGpuTests(unittest.TestCase):
-    def test_queued_job_moves_to_remote_keeping_the_video(self):
-        root = Path(tempfile.mkdtemp())
-        folder = make_video(root)
-        jobs = root / "jobs"
-        jobs.mkdir()
-        job = {"id": "abcdef123456", "kind": "animation", "state": "queued", "pid": 1, "progress": [],
-               "params": {"influencer_name": "Historiador", "batch_id": "2026-10-01-1214", "video_slug": "video-teste",
-                          "gpu": "local"}}
-        (jobs / "abcdef123456.json").write_text(json.dumps(job), encoding="utf-8")
-        with patch.object(acoes, "GENERATED_ROOT", root), patch.object(acoes, "JOBS_DIR", jobs), \
-                patch.object(acoes, "_stop_jobs") as stop, \
-                patch.object(acoes, "start_job", return_value={"id": "fedcba654321"}) as start:
-            result = acoes.mover_gpu("abcdef123456", "remota")
-        stop.assert_called_once_with("2026-10-01-1214", "video-teste")
-        self.assertEqual(start.call_args.args, ("animation", {**job["params"], "gpu": "remota"}))
-        self.assertEqual(result["jobId"], "fedcba654321")
-        self.assertEqual(json.loads((folder / "motion-script.json").read_text(encoding="utf-8"))["gpu"], "remota")
-        job["state"] = "running"
-        (jobs / "abcdef123456.json").write_text(json.dumps(job), encoding="utf-8")
-        with patch.object(acoes, "GENERATED_ROOT", root), patch.object(acoes, "JOBS_DIR", jobs):
-            with self.assertRaises(RuntimeError):
-                acoes.mover_gpu("abcdef123456", "remota")
-
-
 class CharacterPlanTests(unittest.TestCase):
     def test_mixed_batch_tells_each_video_its_character(self):
         characters = {"aquarela-mulher": {"label": "Mulher 50+", "gender": "feminino"},
@@ -441,20 +416,13 @@ class DailyLimitTests(unittest.TestCase):
 
 
 class DesligarComfyuiTests(unittest.TestCase):
-    def test_refuses_while_a_local_job_is_active(self):
+    def test_refuses_while_a_job_is_active(self):
         job = {"id": "x", "state": "running", "params": {}}
         with patch("influencer_mcp.motion_jobs.list_jobs", return_value=[job]), \
                 patch("influencer_mcp.comfyui.stop") as stop:
-            with self.assertRaisesRegex(RuntimeError, "jobs na GPU local"):
+            with self.assertRaisesRegex(RuntimeError, "jobs na GPU"):
                 acoes.desligar_comfyui()
             stop.assert_not_called()
-
-    def test_remote_jobs_do_not_block(self):
-        job = {"id": "x", "state": "running", "params": {"gpu": "remota"}}
-        with patch("influencer_mcp.motion_jobs.list_jobs", return_value=[job]), \
-                patch("influencer_mcp.comfyui.stop", return_value=True) as stop:
-            self.assertIn("desligado", acoes.desligar_comfyui()["message"])
-            stop.assert_called_once()
 
     def test_reports_when_already_off(self):
         with patch("influencer_mcp.motion_jobs.list_jobs", return_value=[]), \

@@ -281,7 +281,6 @@ class MotionQueueOrderTests(unittest.TestCase):
             tempfile.TemporaryDirectory() as temp_dir,
             patch.object(motion_jobs, "JOBS_DIR", Path(temp_dir)),
             patch.object(motion_jobs, "_pid_alive", return_value=True),
-            patch("influencer_mcp.ambiente.default_target", return_value="local"),
         ):
             ids = [motion_jobs.start_job("keyframes", {}, spawn=False)["id"] for _ in range(3)]
             self.assertTrue(motion_jobs._oldest_queued(ids[0]))
@@ -547,7 +546,7 @@ class ThenAnimateTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir, patch.object(motion_jobs, "JOBS_DIR", Path(temp_dir)), \
                 patch.object(motion_jobs, "LOCK_PATH", Path(temp_dir) / "gpu.lock"):
-            job = motion_jobs.start_job("keyframes", {"influencer_name": "T", "batch_id": "b", "gpu": "local",
+            job = motion_jobs.start_job("keyframes", {"influencer_name": "T", "batch_id": "b",
                                                       "script": {"slug": "v"}, "scene_numbers": [3, 4],
                                                       "thenAnimate": True}, spawn=False)
             started = []
@@ -561,7 +560,7 @@ class ThenAnimateTests(unittest.TestCase):
                 motion_jobs.run_job(Path(temp_dir) / f"{job['id']}.json")
             self.assertEqual(motion_jobs._read(Path(temp_dir) / f"{job['id']}.json")["state"], "done")
             self.assertEqual(started, [("animation", {"influencer_name": "T", "batch_id": "b", "video_slug": "v",
-                                                      "gpu": "local", "scene_numbers": [3, 4], "urgent": False})])
+                                                      "scene_numbers": [3, 4], "urgent": False})])
             del real_start
 
 

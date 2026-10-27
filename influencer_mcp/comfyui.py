@@ -31,6 +31,10 @@ GPU_PROFILES = Path(__file__).resolve().parent.parent / "perfis_gpu.json"
 
 
 def gpu_name() -> str:
+    from .ambiente import apple_chip_name, apple_silicon
+
+    if apple_silicon():
+        return apple_chip_name()
     exe = shutil.which("nvidia-smi")
     if not exe:
         return ""
@@ -81,8 +85,7 @@ LOCAL_URLS = ("http://127.0.0.1:8188", "http://localhost:8188")
 
 def discard_outputs(base: str, items: list[dict]) -> None:
     """Apaga, no ComfyUI local, as imagens que o job já baixou para a pasta do vídeo. Ficavam para sempre em
-    tools/ComfyUI/output: ~160 PNG em HD por clipe encheram o disco D: com 372 GB (2026-10-08). Na GPU remota
-    (túnel em outra porta) não faz nada."""
+    tools/ComfyUI/output: ~160 PNG em HD por clipe encheram o disco D: com 372 GB (2026-10-08)."""
     if base.rstrip("/") not in LOCAL_URLS:
         return
     root = comfyui_dir()
@@ -97,13 +100,13 @@ def discard_outputs(base: str, items: list[dict]) -> None:
 def launch() -> int:
     """Inicia o ComfyUI destacado do processo atual (sobrevive ao fim do job ou do terminal) e devolve o pid."""
     folder = comfyui_dir()
-    # venv-v037 é o ambiente da instalação original; o install.ps1 cria "venv".
+    # venv-v037 é o ambiente da instalação original; o install.sh cria "venv".
     python = next(
         (venv_python(folder / name) for name in ("venv-v037", "venv") if venv_python(folder / name).is_file()),
         None,
     )
     if python is None:
-        raise RuntimeError(f"Ambiente Python do ComfyUI não encontrado em {folder}. Execute install.ps1 ou defina COMFYUI_DIR.")
+        raise RuntimeError(f"Ambiente Python do ComfyUI não encontrado em {folder}. Execute ./install.sh ou defina COMFYUI_DIR.")
     log = open(folder / "comfyui.log", "ab")  # noqa: SIM115 - herdado pelo processo filho
     command = [str(python), "main.py", "--listen", "127.0.0.1", "--port", "8188", "--disable-auto-launch"]
     device = os.environ.get("COMFYUI_CUDA_DEVICE", "").strip()
@@ -155,13 +158,6 @@ def stop() -> bool:
 
 def ensure_running(base: str, *, timeout: int = STARTUP_TIMEOUT, log=None) -> bool:
     """Devolve True se o ComfyUI já estava no ar; se não, inicia e espera. Falha com erro claro se não subir."""
-    if os.environ.get("INFLUENCER_GPU") == "remota":
-        # Job da GPU remota: nunca sobe o ComfyUI local; liga a máquina e o túnel, se preciso.
-        from .gpu_remota import ensure_ready
-
-        was_up = is_up(base)
-        ensure_ready(log=log)
-        return was_up
     if is_up(base):
         return True
     from .motion_jobs import _pid_alive  # evita import circular

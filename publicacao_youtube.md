@@ -31,13 +31,13 @@ Claude: você cria a conta, baixa a credencial e autoriza o canal.
 2. Tipo de aplicativo: **App para computador** (Desktop). Nome: `History-Advisor`.
 3. Clique em **Baixar JSON** e salve o arquivo como:
 
-   `D:\Historiador\secrets\client_secret.json`
+   `secrets/client_secret.json` (na pasta do projeto)
 
    A pasta `secrets/` está no `.gitignore`: não vai para o GitHub. Não envie esse arquivo a ninguém.
 
 ## 4. Conectar o canal no painel
 
-1. Abra o painel (`abrir-painel.cmd`). Na seção **Grade de publicação**, clique em **Conectar canal do YouTube**.
+1. Abra o painel (`abrir-painel.command`). Na seção **Grade de publicação**, clique em **Conectar canal do YouTube**.
 2. O navegador abre o login do Google. Escolha a conta e, se pedir, o canal Historiador.
 3. Se aparecer "O Google não verificou este app", clique em **Avançado → Acessar History-Advisor (não seguro)**:
    é o seu próprio app, usado só por você.

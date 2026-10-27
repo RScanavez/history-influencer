@@ -1,6 +1,6 @@
 """Dispara jobs de vídeo com movimento pela linha de comando, sem o Claude Code.
 
-Usa o mesmo ambiente que o .mcp.json repassa ao servidor MCP (variáveis do usuário no Windows).
+Usa o mesmo ambiente que o .mcp.json repassa ao servidor MCP (variáveis do usuário: ~/.influencer.env).
 
 Uso:
   python scripts/motion_job.py keyframes <batch_id> <roteiro.json> [cenas,separadas,por,vírgula]

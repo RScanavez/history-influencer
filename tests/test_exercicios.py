@@ -208,16 +208,11 @@ class WorkflowTests(unittest.TestCase):
     def test_fun_control_is_used_only_where_the_model_exists(self):
         folder = Path(tempfile.mkdtemp())
         (folder / "models" / "unet").mkdir(parents=True)
-        with patch("influencer_mcp.comfyui.comfyui_dir", return_value=folder), patch.dict("os.environ", {"INFLUENCER_GPU": "local"}):
+        with patch("influencer_mcp.comfyui.comfyui_dir", return_value=folder):
             self.assertIsNone(motion.fun_control_models())
             for name in ("Wan2.2-Fun-A14B-Control_HighNoise-Q4_K_M.gguf", "Wan2.2-Fun-A14B-Control_LowNoise-Q4_K_M.gguf"):
                 (folder / "models" / "unet" / name).write_bytes(b"x")
             self.assertEqual(motion.fun_control_models()[2]["class_type"], "UnetLoaderGGUF")
-        remote = {"fun_high": None, "fun_low": None}
-        with patch("influencer_mcp.gpu_remota.settings", return_value=remote), patch.dict("os.environ", {"INFLUENCER_GPU": "remota"}):
-            self.assertIsNone(motion.fun_control_models())
-            remote.update(fun_high="h.safetensors", fun_low="l.safetensors")
-            self.assertEqual(motion.fun_control_models()[:2], ("h.safetensors", "l.safetensors"))
 
 
 class ScriptRulesTests(unittest.TestCase):

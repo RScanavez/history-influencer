@@ -2,23 +2,16 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from .formats import THUMBNAIL_SIZE
-
-FONT_CANDIDATES = ("ariblk.ttf", "arialbd.ttf", "segoeuib.ttf", "impact.ttf")
-
+from .winproc import caption_font
 
 def _font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    folder = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts"
-    for name in FONT_CANDIDATES:
-        path = folder / name
-        if path.is_file():
-            return ImageFont.truetype(str(path), size)
-    return ImageFont.load_default()
+    path = caption_font(bold=True)
+    return ImageFont.truetype(str(path), size) if path.is_file() else ImageFont.load_default()
 
 
 def _wrap(draw: ImageDraw.ImageDraw, text: str, font, width: int) -> list[str]:
