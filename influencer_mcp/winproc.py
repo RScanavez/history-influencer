@@ -47,13 +47,17 @@ USER_ENV_FILE = Path.home() / ".influencer.env"
 
 def load_user_env() -> None:
     """macOS/Linux: equivalente às variáveis de ambiente do usuário do Windows. Lê ~/.influencer.env (linhas
-    CHAVE=valor, gravadas pelo install.sh) sem sobrescrever o que já estiver definido."""
+    CHAVE=valor, gravadas pelo install.sh) sem sobrescrever o que já estiver definido. Valor vazio ou nome solto
+    ("ffmpeg"), que o .mcp.json usa como reserva quando a variável não existe, cede ao caminho do arquivo."""
     if os.name == "nt" or not USER_ENV_FILE.is_file():
         return
     for line in USER_ENV_FILE.read_text(encoding="utf-8").splitlines():
         name, separator, value = line.strip().partition("=")
         if separator and name and not name.startswith("#"):
-            os.environ.setdefault(name, value.strip().strip('"'))
+            value = value.strip().strip('"')
+            current = os.environ.get(name, "")
+            if not current or (os.sep not in current and os.path.isabs(value)):
+                os.environ[name] = value
 
 
 def venv_python(venv: Path) -> Path:

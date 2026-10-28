@@ -2,11 +2,16 @@
 # Instalador para macOS (Apple Silicon). Pode rodar de novo sem problemas: o que já existe é mantido e downloads
 # interrompidos continuam de onde pararam.
 # Instala: Python 3.11 (via uv), FFmpeg, o .venv do servidor MCP, o modelo MediaPipe Pose, a narração Kokoro e o
-# ComfyUI (GPU Metal/MPS) com os nós e ~60 GB de modelos. As variáveis ficam em ~/.influencer.env.
+# ComfyUI (GPU Metal/MPS) com os nós e ~60 GB de modelos, e os motores de vídeo MLX (mlx-fastwan e mlx-turbo, ~23 GB).
+# As variáveis ficam em ~/.influencer.env.
 # Opções: --skip-models (não baixa os modelos grandes; rode de novo sem a opção antes do primeiro lote).
+#         --all-engines (também os motores mlx-wan5b e ltx, mais ~45 GB).
 set -euo pipefail
-SKIP_MODELS=0
-for arg in "$@"; do [ "$arg" = "--skip-models" ] && SKIP_MODELS=1; done
+SKIP_MODELS=0; ALL_ENGINES=0
+for arg in "$@"; do
+  [ "$arg" = "--skip-models" ] && SKIP_MODELS=1
+  [ "$arg" = "--all-engines" ] && ALL_ENGINES=1
+done
 cd "$(dirname "$0")"
 PROJECT="$PWD"
 TOOLS="${INFLUENCER_TOOLS_DIR:-$HOME/Influencer/tools}"
@@ -15,7 +20,7 @@ export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 step() { printf '\n==> %s\n' "$1"; }
 
-step "1/6 Pré-requisitos"
+step "1/7 Pré-requisitos"
 if ! command -v uv >/dev/null; then
   echo "    instalando uv (gerenciador de Python, instalador oficial da Astral)..."
   curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -37,7 +42,7 @@ else
 fi
 command -v claude >/dev/null || echo "    aviso: Claude Code não encontrado (https://claude.ai/install.sh)."
 
-step "2/6 Servidor MCP (.venv) e modelo MediaPipe"
+step "2/7 Servidor MCP (.venv) e modelo MediaPipe"
 [ -x .venv/bin/python ] || uv venv --python 3.11 .venv
 uv pip install --python .venv/bin/python -e ".[dev]"
 POSE="$PROJECT/generated/models/pose_landmarker_lite.task"
@@ -45,13 +50,13 @@ mkdir -p "$(dirname "$POSE")"
 [ -s "$POSE" ] || curl -fL --retry 5 -o "$POSE" \
   https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task
 
-step "3/6 Narração Kokoro"
+step "3/7 Narração Kokoro"
 KOKORO_VENV="$TOOLS/tts/venv"
 mkdir -p "$TOOLS/tts"
 [ -x "$KOKORO_VENV/bin/python" ] || uv venv --python 3.11 "$KOKORO_VENV"
 uv pip install --python "$KOKORO_VENV/bin/python" torch torchaudio kokoro soundfile num2words phonemizer-fork espeakng-loader
 
-step "4/6 ComfyUI e nós personalizados"
+step "4/7 ComfyUI e nós personalizados"
 COMFY="$TOOLS/ComfyUI"
 clone() { [ -d "$2/.git" ] || git clone --depth 1 "$1" "$2"; }
 mkdir -p "$TOOLS"
@@ -66,7 +71,7 @@ clone https://github.com/Fannovel16/ComfyUI-Frame-Interpolation.git "$COMFY/cust
 uv pip install --python "$CPY" -r "$COMFY/custom_nodes/ComfyUI-Frame-Interpolation/requirements-no-cupy.txt"
 clone https://github.com/cubiq/ComfyUI_IPAdapter_plus.git "$COMFY/custom_nodes/ComfyUI_IPAdapter_plus"
 
-step "5/6 Modelos (~60 GB; downloads interrompidos são retomados)"
+step "5/7 Modelos do ComfyUI (~60 GB; downloads interrompidos são retomados)"
 HF=https://huggingface.co
 MODELS=(
   "$HF/RunDiffusion/Juggernaut-XL-v9/resolve/main/Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors checkpoints/Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors"
@@ -100,7 +105,57 @@ else
   done
 fi
 
-step "6/6 Variáveis em $ENV_FILE"
+step "6/7 Motores de vídeo MLX (videoEngine no roteiro)"
+# Versões fixadas nas testadas em 2026-10-28 no Apple M6.
+MLX="$TOOLS/mlx"
+MPY="$MLX/venv/bin/python"
+mkdir -p "$MLX/models" "$MLX/vendor"
+[ -x "$MPY" ] || uv venv --python 3.11 "$MLX/venv"
+uv pip install --python "$MPY" torch \
+  "mlx-video @ git+https://github.com/Blaizzy/mlx-video.git@87db56a51758fefb748a359b90a5283bb8ba4837"
+# TAEHV em MLX e RIFE 4.25 em MLX, do FastVideo (Apache-2.0; arquitetura TAEHV de madebyollin/taehv, MIT)
+FASTVIDEO="$MLX/FastVideo"
+if [ ! -f "$MLX/vendor/taehv_mlx.py" ]; then
+  [ -d "$FASTVIDEO/.git" ] || git clone --filter=blob:none https://github.com/hao-ai-lab/FastVideo.git "$FASTVIDEO"
+  git -C "$FASTVIDEO" checkout -q 6743f4b4b76634f7854942eddf49a68fe65e66f0
+  cp -R "$FASTVIDEO/fastvideo/third_party/rife_mlx" "$FASTVIDEO/fastvideo/third_party/taehv" "$MLX/vendor/"
+  { echo "# Decodificador TAEHV em MLX, copiado de FastVideo (Apache-2.0) fastvideo/mlx_runtime/wan_vae.py, commit 6743f4b,"
+    echo "# linhas 201-402 sem alterações; arquitetura de madebyollin/taehv (MIT, ver taehv/LICENSE)."
+    printf 'from __future__ import annotations\nfrom pathlib import Path\nfrom typing import Any\nimport numpy as np\n\n'
+    sed -n 201,402p "$FASTVIDEO/fastvideo/mlx_runtime/wan_vae.py"; } > "$MLX/vendor/taehv_mlx.py"
+fi
+if [ "$ALL_ENGINES" = 1 ]; then
+  clone https://github.com/dgrauet/ltx-2-mlx.git "$MLX/ltx-2-mlx"
+  git -C "$MLX/ltx-2-mlx" fetch -q --depth 1 origin 895201df379b079c2154738bcf92005b7a371923
+  git -C "$MLX/ltx-2-mlx" checkout -q 895201df379b079c2154738bcf92005b7a371923
+  (cd "$MLX/ltx-2-mlx" && uv sync)
+fi
+if [ "$SKIP_MODELS" != 1 ]; then
+  TAEHV="$MLX/models/taehv/taew2_2.pth"
+  if [ ! -s "$TAEHV" ]; then
+    mkdir -p "$(dirname "$TAEHV")"
+    curl -fL --retry 5 -o "$TAEHV.part" \
+      https://raw.githubusercontent.com/madebyollin/taehv/563f40bdc820ed86bcad72ea515ee48f06bd22ec/taew2_2.pth
+    echo "d053e216ca50e2bb837bbcd79b85f0366bea00e5938025572382a773b74c559a  $TAEHV.part" | shasum -a 256 -c -
+    mv "$TAEHV.part" "$TAEHV"
+  fi
+  REPOS="lBroth/FastWan2.2-TI2V-5B-MLX=fastwan-5b mlx-community/RIFE-4.25=rife-4.25"
+  [ "$ALL_ENGINES" = 1 ] && REPOS="$REPOS Anes1032/Wan2.2-TI2V-5B-mlx-q8=wan-5b-q8 mlx-community/gemma-3-12b-it-4bit=gemma-3-12b-it-4bit"
+  for entry in $REPOS; do
+    echo "    baixando ${entry%%=*}"
+    "$MPY" -c "import sys; from huggingface_hub import snapshot_download as s; s(sys.argv[1], local_dir=sys.argv[2])" \
+      "${entry%%=*}" "$MLX/models/${entry#*=}"
+  done
+  if [ "$ALL_ENGINES" = 1 ]; then
+    # só o transformador destilado 1.1: os outros (dev, LoRAs) não são usados e somam ~40 GB
+    "$MPY" -c "import sys; from huggingface_hub import snapshot_download as s
+s('dgrauet/ltx-2.3-mlx-q4', local_dir=sys.argv[1], ignore_patterns=['transformer-*', '*distilled-lora*'])
+s('dgrauet/ltx-2.3-mlx-q4', local_dir=sys.argv[1], allow_patterns=['transformer-distilled-1.1.safetensors'])" \
+      "$MLX/models/ltx-2.3-q4"
+  fi
+fi
+
+step "7/7 Variáveis em $ENV_FILE"
 set_var() { grep -v "^$1=" "$ENV_FILE" 2>/dev/null > "$ENV_FILE.tmp" || true; echo "$1=$2" >> "$ENV_FILE.tmp"; mv "$ENV_FILE.tmp" "$ENV_FILE"; }
 touch "$ENV_FILE"
 set_var COMFYUI_DIR "$COMFY"

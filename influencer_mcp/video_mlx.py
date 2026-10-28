@@ -5,6 +5,8 @@ Wan 2.2 TI2V-5B q8 no MLX (20 passos) 353 s, FastWan 5B no MLX (3 passos) 167 s.
 ("videoEngine") ou da variável INFLUENCER_VIDEO_ENGINE; sem nenhum, segue o ComfyUI.
 
 - mlx-fastwan / mlx-wan5b: scripts/mlx_wan_clip.py no ambiente do MLX (mlx-video).
+- mlx-turbo: FastWan com o decodificador TAEHV e metade dos quadros preenchida pelo RIFE (técnicas do FastMetal);
+  no mesmo clipe de 121 quadros, 37 s contra ~300 s do mlx-fastwan.
 - ltx: LTX-2.3 destilado (q4) pelo ltx-2-mlx.
 Cada clipe sai em MP4 a 24 fps; os quadros viram PNG na pasta do clipe, como os do ComfyUI, e a montagem estica os
 quadros para cobrir a narração e amplia para o tamanho final.
@@ -22,7 +24,7 @@ from typing import Any
 from .winproc import tools_dir
 
 COMFYUI = "comfyui"
-ENGINES = (COMFYUI, "mlx-fastwan", "mlx-wan5b", "ltx")
+ENGINES = (COMFYUI, "mlx-fastwan", "mlx-turbo", "mlx-wan5b", "ltx")
 FPS = 24
 MAX_FRAMES = 121  # ~5 s a 24 fps; mais que isso estoura a memória de 32 GB
 CLIP_TIMEOUT = 3 * 3600
@@ -69,11 +71,14 @@ def _command(engine: str, image: Path, prompt: str, negative: str, frames: int, 
                 "--no-audio", "--seed", str(seed), "-o", str(output)]
     python = os.environ.get("MLX_PYTHON") or str(root / "venv" / "bin" / "python")
     script = Path(__file__).resolve().parents[1] / "scripts" / "mlx_wan_clip.py"
-    model = root / "models" / ("fastwan-5b" if engine == "mlx-fastwan" else "wan-5b-q8")
+    model = root / "models" / ("wan-5b-q8" if engine == "mlx-wan5b" else "fastwan-5b")
     command = [python, str(script), "--model-dir", str(model), "--image", str(image), "--prompt", prompt,
                "--width", str(width), "--height", str(height), "--frames", str(frames), "--seed", str(seed),
                "--output", str(output)]
-    if engine == "mlx-fastwan":
+    if engine == "mlx-turbo":
+        command += ["--vendor", str(root / "vendor"), "--taehv", str(root / "models" / "taehv" / "taew2_2.pth"),
+                    "--rife", str(root / "models" / "rife-4.25")]
+    if engine in ("mlx-fastwan", "mlx-turbo"):
         command.append("--dmd")
     else:
         command += ["--steps", "20", "--negative", negative]
