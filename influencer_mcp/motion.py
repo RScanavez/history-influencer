@@ -48,7 +48,7 @@ from .media import (
     _wrap_text,
 )
 
-from . import gpu_auxiliar, perfis
+from . import gpu_auxiliar, perfis, video_mlx
 from .comfyui import discard_outputs
 
 Progress = Callable[[str], None] | None
@@ -759,6 +759,7 @@ def animate_scene(
     yield_gpu: Callable[[], None] | None = None,
     background: ThreadPoolExecutor | None = None,
     pending: list[Future] | None = None,
+    engine: str = video_mlx.COMFYUI,
 ) -> list[Path]:
     """Gera os clipes da cena encadeados pelo último quadro; devolve os quadros HD em ordem.
 
@@ -768,6 +769,9 @@ def animate_scene(
     if scene.get("exercise") and scene.get("showCharacter", True) is not False:
         return animate_exercise_scene(scene, keyframe, duration, work_dir, seed=seed, progress=progress, fmt=fmt,
                                       profile=profile, yield_gpu=yield_gpu)
+    if engine != video_mlx.COMFYUI:
+        return _animate_scene_mlx(scene, keyframe, duration, work_dir, seed=seed, progress=progress, fmt=fmt,
+                                  profile=profile, yield_gpu=yield_gpu, engine=engine)
     base = _comfyui_url(require_avatar_checkpoint=False)
     start = keyframe
     hd_frames: list[Path] = []
@@ -831,6 +835,47 @@ def animate_scene(
         start = last_raw
         if progress:
             progress(f"{work_dir.name}: clipe {clip_index}/{len(plan)} em {seconds:.0f}s")
+    return hd_frames
+
+
+def _animate_scene_mlx(scene: dict[str, Any], keyframe: Path, duration: float, work_dir: Path, *, seed: int,
+                       progress: Progress, fmt: str, profile: str, yield_gpu: Callable[[], None] | None,
+                       engine: str) -> list[Path]:
+    """animate_scene com um motor MLX (video_mlx): mesmos prompts de personagem e estilo do workflow do Wan, clipes
+    encadeados pelo último quadro e retomada por done.json. Sem ampliação nem RIFE: o MLX já gera a 24 fps e a
+    montagem amplia para o tamanho final."""
+    with_character = scene.get("showCharacter", True) is not False
+    number = re.search(r"(\d+)$", work_dir.name)
+    camera = None if with_character else subject_camera(scene, int(number.group(1)) if number else 1)
+    plan = video_mlx.clip_plan(engine, duration, scene["motions"], MAX_SLOWDOWN)
+    start, hd_frames, freed = keyframe, [], False
+    for clip_index, (motion, frames) in enumerate(plan, 1):
+        clip_dir = work_dir / f"clip-{clip_index}"
+        done_path = clip_dir / "done.json"
+        if done_path.is_file():
+            done = json.loads(done_path.read_text(encoding="utf-8"))
+            if done.get("engine") == engine:
+                hd_frames.extend(clip_dir / name for name in done["hd"])
+                start = clip_dir / done["last_raw"]
+                continue
+            shutil.rmtree(clip_dir)  # clipe de outro motor: refaz com o escolhido
+        if yield_gpu:
+            yield_gpu()
+        if not freed:
+            video_mlx.free_comfyui_memory()
+            freed = True
+        workflow = wan_i2v_workflow(start_image="-", prompt=subject_clip_prompt(motion, camera) if camera else motion,
+                                    frames=frames, seed=seed + clip_index, prefix="-", fmt=fmt, profile=profile,
+                                    with_character=with_character, outfit=scene.get("outfit"))
+        record = video_mlx.generate_clip(
+            engine, image=start, prompt=workflow["8"]["inputs"]["text"], negative=workflow["9"]["inputs"]["text"],
+            frames=frames, seed=seed + clip_index, fmt=normalize_format(fmt), clip_dir=clip_dir, skip_first=clip_index > 1)
+        record.update(motion=motion, camera=camera)
+        done_path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+        hd_frames.extend(clip_dir / name for name in record["hd"])
+        start = clip_dir / record["last_raw"]
+        if progress:
+            progress(f"{work_dir.name}: clipe {clip_index}/{len(plan)} em {record['seconds']:.0f}s ({engine})")
     return hd_frames
 
 
@@ -1597,6 +1642,7 @@ def animate_motion_short(
     scenes = validate_motion_script(script)
     fmt = of_script(script)
     profile = perfis.of_script(script)
+    engine = video_mlx.engine_of(script)
     ffprobe = _get_executable("FFPROBE_EXECUTABLE", "ffprobe")
     narrations = [output_dir / f"scene-{index:02d}" / "narration.wav" for index in range(1, len(scenes) + 1)]
     if all(path.is_file() for path in narrations):
@@ -1647,6 +1693,7 @@ def animate_motion_short(
                     {**scene, "outfit": JIUJITSU_OUTFIT if is_jiujitsu(script) else script.get("outfit")}, keyframe,
                     duration, scene_dir, seed=int(scene.get("seed") or 0) + 1000 * index, progress=report_progress,
                     fmt=fmt, profile=profile, yield_gpu=yield_gpu, background=background, pending=pending,
+                    engine=engine,
                 )
                 downloads.extend(pending)
                 if not segment.is_file():
