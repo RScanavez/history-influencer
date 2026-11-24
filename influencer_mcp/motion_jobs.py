@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from .media import GENERATED_ROOT, PROJECT_ROOT
-from .winproc import detached, quiet
+from .winproc import detached, quiet, venv_python
 
 JOBS_DIR = GENERATED_ROOT / "jobs"
 # Trava da GPU: INFLUENCER_GPU_LOCK aponta para um arquivo comum quando dois projetos dividem a mesma placa
@@ -203,7 +203,7 @@ def start_job(kind: str, params: dict[str, Any], *, spawn: bool = True) -> dict[
 
 def _project_python() -> str:
     """Python do .venv do projeto (sys.executable pode ser o Python base quando o servidor MCP roda pelo venv)."""
-    venv = PROJECT_ROOT / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    venv = venv_python(PROJECT_ROOT / ".venv")
     return str(venv) if venv.is_file() else sys.executable
 
 
@@ -470,6 +470,13 @@ def _keep_awake() -> None:
     if os.name == "nt":
         es_continuous, es_system_required, es_display_required = 0x80000000, 0x00000001, 0x00000002
         ctypes.windll.kernel32.SetThreadExecutionState(es_continuous | es_system_required | es_display_required)
+    elif sys.platform == "darwin":
+        # caffeinate -d -i -w <pid>: mantém tela e sistema acordados até este processo terminar.
+        try:
+            subprocess.Popen(["caffeinate", "-d", "-i", "-w", str(os.getpid())], stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        except OSError:
+            pass
 
 
 def run_job(path: Path) -> None:

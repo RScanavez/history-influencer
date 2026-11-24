@@ -2,12 +2,12 @@
   "mcpServers": {
     "influencer-local": {
       "type": "stdio",
-      "command": "${INFLUENCER_ROOT:-D:\\Historiador}\\.venv\\Scripts\\python.exe",
+      "command": "${INFLUENCER_ROOT:-/Users/rscanavez/Documents/history-influencer}/.venv/bin/python",
       "args": [
         "-m",
         "influencer_mcp"
       ],
-      "cwd": "${INFLUENCER_ROOT:-D:\\Historiador}",
+      "cwd": "${INFLUENCER_ROOT:-/Users/rscanavez/Documents/history-influencer}",
       "env": {
         "COMFYUI_URL": "http://127.0.0.1:8188",
         "COMFYUI_CHECKPOINT": "${COMFYUI_CHECKPOINT:-Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors}",
@@ -23,10 +23,9 @@
         "TTS_ENGINE": "kokoro",
         "KOKORO_VOICE": "pm_santa",
         "KOKORO_SPEED": "1.0",
-        "KOKORO_PYTHON": "${KOKORO_PYTHON:-D:\\Influencer\\tools\\tts\\venv\\Scripts\\python.exe}",
+        "KOKORO_PYTHON": "${KOKORO_PYTHON:-}",
         "INFLUENCER_NAME": "Historiador",
-        "INFLUENCER_GPU_LOCK": "${INFLUENCER_GPU_LOCK:-D:\\Influencer\\Influencer\\generated\\jobs\\gpu.lock}",
-        "COMFYUI_DIR": "${COMFYUI_DIR:-D:\\Influencer\\tools\\ComfyUI}"
+        "INFLUENCER_GPU_LOCK": "${INFLUENCER_GPU_LOCK:-/Users/rscanavez/Documents/personal-influencer/generated/jobs/gpu.lock}"
       }
     }
   }

@@ -15,7 +15,8 @@ class TargetTests(unittest.TestCase):
         self.jobs = self.root / "jobs"
         self.jobs.mkdir()
         for item in (patch.object(mj, "GENERATED_ROOT", self.root), patch.object(mj, "JOBS_DIR", self.jobs),
-                     patch.object(mj, "LOCK_PATH", self.jobs / "gpu.lock"), patch.object(mj, "_job_alive", return_value=True)):
+                     patch.object(mj, "LOCK_PATH", self.jobs / "gpu.lock"), patch.object(mj, "_job_alive", return_value=True),
+                     patch("influencer_mcp.ambiente.default_target", return_value="local")):
             item.start()
             self.addCleanup(item.stop)
 

@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from .winproc import detached, quiet
+from .winproc import detached, kill_tree, quiet
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = PROJECT_ROOT / "gpu_remota.md"
@@ -144,7 +144,7 @@ def open_tunnel(host: str, port: int) -> int:
 def close_tunnel() -> None:
     pid = int(_state().get("tunnelPid") or 0)
     if pid and _tunnel_alive():
-        subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, check=False, **quiet())
+        kill_tree(pid)
     _save_state(tunnelPid=0)
 
 

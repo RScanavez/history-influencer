@@ -3,6 +3,20 @@
 > (em `.mcp.json` e `abrir-painel.cmd`) aponta para o `gpu.lock` do Influencer, para os dois nunca usarem a placa ao mesmo tempo.
 > Painel na porta 8766 (o do Influencer usa a 8765). Segredos do YouTube (`secrets/`) são do novo canal: siga `publicacao_youtube.md`.
 
+## macOS (branch `mac-version`)
+
+Adaptações trazidas do branch `mac-version` do personal-influencer.
+
+```bash
+./install.sh              # Python 3.11 (uv), .venv, FFmpeg, modelo MediaPipe e Kokoro; grava ~/.influencer.env
+./abrir-painel.command    # painel em http://127.0.0.1:8766 (também por duplo clique no Finder)
+```
+
+Equivalências: `Scripts/python.exe` → `bin/python`; variáveis de usuário do Windows → `~/.influencer.env` (compartilhado
+com o personal-influencer: ferramentas em `~/Influencer/tools`); `taskkill` → `psutil`; `netstat` → `lsof`; manter o PC
+acordado → `caffeinate`. O `.mcp.json` assume o projeto em `~/Documents/history-influencer` (mude com a variável
+`INFLUENCER_ROOT`) e a trava da GPU no `gpu.lock` do personal-influencer em `~/Documents/personal-influencer`.
+
 # Produção local de YouTube Shorts com Claude
 
 ## HOW TO

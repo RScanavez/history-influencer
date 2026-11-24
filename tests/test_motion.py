@@ -281,6 +281,7 @@ class MotionQueueOrderTests(unittest.TestCase):
             tempfile.TemporaryDirectory() as temp_dir,
             patch.object(motion_jobs, "JOBS_DIR", Path(temp_dir)),
             patch.object(motion_jobs, "_pid_alive", return_value=True),
+            patch("influencer_mcp.ambiente.default_target", return_value="local"),
         ):
             ids = [motion_jobs.start_job("keyframes", {}, spawn=False)["id"] for _ in range(3)]
             self.assertTrue(motion_jobs._oldest_queued(ids[0]))

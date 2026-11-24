@@ -10,13 +10,13 @@ import time
 from pathlib import Path
 
 from .media import _request_json
-from .winproc import detached, quiet
+from .winproc import detached, kill_tree, quiet, tools_dir, venv_python
 
 STARTUP_TIMEOUT = 300  # carregar os nós personalizados leva ~35 s; folga para disco frio após reiniciar o PC
 
 
 def comfyui_dir() -> Path:
-    return Path(os.environ.get("COMFYUI_DIR") or r"D:\Influencer\tools\ComfyUI")
+    return Path(os.environ.get("COMFYUI_DIR") or tools_dir() / "ComfyUI")
 
 
 def is_up(base: str) -> bool:
@@ -99,8 +99,7 @@ def launch() -> int:
     folder = comfyui_dir()
     # venv-v037 é o ambiente da instalação original; o install.ps1 cria "venv".
     python = next(
-        (folder / name / "Scripts" / "python.exe" for name in ("venv-v037", "venv")
-         if (folder / name / "Scripts" / "python.exe").is_file()),
+        (venv_python(folder / name) for name in ("venv-v037", "venv") if venv_python(folder / name).is_file()),
         None,
     )
     if python is None:
@@ -127,6 +126,10 @@ PORT = 8188
 
 def _listening_pid(port: int = PORT) -> int:
     """Pid que escuta a porta local do ComfyUI (0 se ninguém escuta)."""
+    if os.name != "nt":
+        result = subprocess.run(["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"], capture_output=True, text=True)
+        first = result.stdout.split()
+        return int(first[0]) if first and first[0].isdigit() else 0
     result = subprocess.run(["netstat", "-ano", "-p", "TCP"], capture_output=True, text=True, **quiet())
     for line in result.stdout.splitlines():
         parts = line.split()
@@ -145,7 +148,7 @@ def stop() -> bool:
         pid = _listening_pid()  # subido por outro meio (ou pid velho): quem escuta a porta é o ComfyUI
     if not pid:
         return False
-    subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, check=False, **quiet())
+    kill_tree(pid)
     pid_file.unlink(missing_ok=True)
     return True
 

@@ -14,7 +14,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from .winproc import quiet
+from .winproc import quiet, venv_python
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -41,8 +41,7 @@ def local_gpu() -> dict[str, Any]:
     gpus, problem = _nvidia_gpus()
     problems = [problem] if problem else []
     folder = comfyui_dir()
-    has_python = any((folder / name / "Scripts" / "python.exe").is_file() or (folder / name / "bin" / "python").is_file()
-                     for name in ("venv-v037", "venv"))
+    has_python = any(venv_python(folder / name).is_file() for name in ("venv-v037", "venv"))
     if not (folder / "main.py").is_file() or not has_python:
         problems.append(f"ComfyUI local não encontrado em {folder} (defina COMFYUI_DIR ou instale com install.ps1).")
     return {"available": not problems, "gpus": gpus, "problems": problems}

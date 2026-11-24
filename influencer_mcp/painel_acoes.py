@@ -22,7 +22,7 @@ from typing import Any
 from .localize import LANGUAGES, enabled_languages, require_enabled, translation_path
 from .media import GENERATED_ROOT, MIN_SCENES, PROJECT_ROOT, _slug, save_publish_metadata
 from .motion_jobs import JOBS_DIR, _job_alive, _pid_alive, pid_alive_since, start_job
-from .winproc import detached, quiet
+from .winproc import detached, kill_tree, quiet
 
 INFLUENCER = os.environ.get("INFLUENCER_NAME", "Historiador")
 # Data + sufixo (hora "2311" ou nome como "teste3d"); só minúsculas, dígitos e hífens, sem "..".
@@ -38,7 +38,7 @@ LOTES_DIR = GENERATED_ROOT / "lotes"
 # INFLUENCER_CLAUDE_MODEL (ex.: "opus") se a qualidade dos roteiros cair.
 LOTE_MODEL = os.environ.get("INFLUENCER_CLAUDE_MODEL", "sonnet")
 LOTE_TOOLS = [
-    "mcp__influencer-local", "Read", "Glob", "Grep", "Bash(python:*)", "Bash(.venv/Scripts/python.exe:*)",
+    "mcp__influencer-local", "Read", "Glob", "Grep", "Bash(python:*)", "Bash(.venv/Scripts/python.exe:*)", "Bash(.venv/bin/python:*)",
 ]
 
 def _job_files() -> list[Path]:
@@ -303,7 +303,7 @@ def _stop_jobs(batch: str, slug: str) -> list[str]:
         pid = int(job.get("pid") or 0)
         if pid and _job_alive(job):
             holder = (JOBS_DIR / "gpu.lock").read_text().strip() if (JOBS_DIR / "gpu.lock").is_file() else ""
-            subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, check=False, **quiet())
+            kill_tree(pid)
             if holder == str(pid):
                 # Era quem usava a GPU: interrompe o que ele deixou rodando no ComfyUI.
                 from .media import _comfyui_url, _request_json

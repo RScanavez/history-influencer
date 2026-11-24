@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from .illustration import POSES, render_openpose_guide
 from .pose_validation import validate_pose_image
-from .winproc import quiet
+from .winproc import quiet, tools_dir, venv_python
 
 PROJECT_ROOT = Path(os.environ.get("CLAUDE_PROJECT_DIR", Path.cwd())).resolve()
 GENERATED_ROOT = PROJECT_ROOT / "generated"
@@ -129,7 +129,7 @@ def synthesize_narration(
     if lang != "p" and engine != "kokoro":
         raise ValueError("Narração em outro idioma só está disponível com a Kokoro.")
     if engine == "kokoro":
-        python = _get_executable("KOKORO_PYTHON", r"D:\Influencer\tools\tts\venv\Scripts\python.exe")
+        python = _get_executable("KOKORO_PYTHON", str(venv_python(tools_dir() / "tts" / "venv")))
         command = [
             python, str(PROJECT_ROOT / "scripts" / "kokoro_tts.py"),
             "--voice", voice or os.environ.get("KOKORO_VOICE", "pm_santa"),
